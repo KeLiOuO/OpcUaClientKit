@@ -87,6 +87,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         var session = GetRequiredSession();
         var normalizedNodeId = NormalizeNodeId(nodeId, nameof(nodeId));
         var dataValue = await session.ReadValueAsync(ParseNodeId(normalizedNodeId), ct).ConfigureAwait(false);
+        EnsureReadSucceeded(dataValue, normalizedNodeId);
         return dataValue.Value;
     }
 
@@ -104,7 +105,9 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
         var session = GetRequiredSession();
         var normalizedNodeId = NormalizeNodeId(nodeId, nameof(nodeId));
-        return await session.ReadValueAsync<T>(ParseNodeId(normalizedNodeId), ct).ConfigureAwait(false);
+        var dataValue = await session.ReadValueAsync(ParseNodeId(normalizedNodeId), ct).ConfigureAwait(false);
+        EnsureReadSucceeded(dataValue, normalizedNodeId);
+        return ConvertReadValue<T>(dataValue.Value, normalizedNodeId);
     }
 
     public Task<T?> ReadNodeAsync<T>(OpcUaNode node, CancellationToken ct = default)
@@ -412,6 +415,74 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
 
         return results;
+    }
+
+    private static void EnsureReadSucceeded(DataValue dataValue, string nodeId)
+    {
+        if (dataValue == null)
+        {
+            throw new InvalidOperationException($"The OPC UA server returned no value for node '{nodeId}'.");
+        }
+
+        if (StatusCode.IsBad(dataValue.StatusCode))
+        {
+            throw new ServiceResultException(dataValue.StatusCode, $"Failed to read node '{nodeId}'.");
+        }
+    }
+
+    private static T? ConvertReadValue<T>(object? value, string nodeId)
+    {
+        if (value == null)
+        {
+            return default;
+        }
+
+        if (value is T typedValue)
+        {
+            return typedValue;
+        }
+
+        var targetType = typeof(T);
+        var effectiveTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        try
+        {
+            if (effectiveTargetType.IsEnum)
+            {
+                if (value is string enumText)
+                {
+                    return (T)Enum.Parse(effectiveTargetType, enumText, ignoreCase: true);
+                }
+
+                var enumUnderlyingType = Enum.GetUnderlyingType(effectiveTargetType);
+                var enumValue = Convert.ChangeType(value, enumUnderlyingType, CultureInfo.InvariantCulture);
+                return (T)Enum.ToObject(effectiveTargetType, enumValue!);
+            }
+
+            if (effectiveTargetType.IsInstanceOfType(value))
+            {
+                return (T)value;
+            }
+
+            if (value is IConvertible &&
+                typeof(IConvertible).IsAssignableFrom(effectiveTargetType))
+            {
+                return (T)Convert.ChangeType(value, effectiveTargetType, CultureInfo.InvariantCulture);
+            }
+        }
+        catch (Exception exception) when (
+            exception is InvalidCastException ||
+            exception is FormatException ||
+            exception is OverflowException ||
+            exception is ArgumentException)
+        {
+            throw new InvalidCastException(
+                $"Failed to convert node '{nodeId}' value from '{value.GetType().FullName}' to '{targetType.FullName}'.",
+                exception);
+        }
+
+        throw new InvalidCastException(
+            $"Failed to convert node '{nodeId}' value from '{value.GetType().FullName}' to '{targetType.FullName}'.");
     }
 
     private async Task WriteNodesCoreAsync(
@@ -759,35 +830,34 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 try
                 {
                     await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
-                    subscription.AddRegistrations(monitoredItems);
+                }
+                catch (Exception exception)
+                {
+                    await RollbackEventMonitoredItemsAsync(subscription, monitoredItems, ct).ConfigureAwait(false);
 
+                    if (useServerSideSuppressedOrShelvedFilter &&
+                        filterDefinition.CanFallbackToClientSideSuppressedOrShelvedFilter &&
+                        CanRetryWithoutSuppressedOrShelvedServerFilter(exception))
+                    {
+                        useServerSideSuppressedOrShelvedFilter = false;
+                        continue;
+                    }
+                    throw;
+                }
+
+                try
+                {
                     if (conditionRefreshOnStart)
                     {
                         await subscription.Subscription.ConditionRefreshAsync(ct).ConfigureAwait(false);
                     }
 
+                    subscription.AddRegistrations(monitoredItems);
                     break;
                 }
                 catch
                 {
-                    subscription.Subscription.RemoveItems(monitoredItems.Select(static item => item.MonitoredItem));
-                    OpcUaEventSubscriptionHandle.DetachHandlers(monitoredItems);
-
-                    try
-                    {
-                        await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
-                    }
-                    catch when (!ct.IsCancellationRequested)
-                    {
-                        // Best effort rollback.
-                    }
-
-                    if (useServerSideSuppressedOrShelvedFilter && filterDefinition.CanFallbackToClientSideSuppressedOrShelvedFilter)
-                    {
-                        useServerSideSuppressedOrShelvedFilter = false;
-                        continue;
-                    }
-
+                    await RollbackEventMonitoredItemsAsync(subscription, monitoredItems, ct).ConfigureAwait(false);
                     throw;
                 }
             }
@@ -1210,7 +1280,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
 
         if (registration.FilterDefinition.IgnoreSuppressedOrShelved &&
-            GetBooleanField(fields, OpcUaEventFieldKeys.SuppressedOrShelved) == true)
+            ShouldIgnoreSuppressedOrShelvedEvent(fields))
         {
             return null;
         }
@@ -1427,6 +1497,18 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 OpcUaEventFieldKeys.SuppressedOrShelved,
                 OpcUaEventFieldKeys.SuppressedOrShelved,
                 CreateEventOperand(ObjectTypeIds.AlarmConditionType, Attributes.Value, BrowseNames.SuppressedOrShelved));
+            AddSelectClauseDescriptor(
+                descriptors,
+                knownKeys,
+                OpcUaEventFieldKeys.SuppressedStateId,
+                OpcUaEventFieldKeys.SuppressedStateId,
+                CreateEventOperand(ObjectTypeIds.AlarmConditionType, Attributes.Value, BrowseNames.SuppressedState, BrowseNames.Id));
+            AddSelectClauseDescriptor(
+                descriptors,
+                knownKeys,
+                OpcUaEventFieldKeys.ShelvingStateCurrentState,
+                OpcUaEventFieldKeys.ShelvingStateCurrentState,
+                CreateEventOperand(ObjectTypeIds.AlarmConditionType, Attributes.Value, BrowseNames.ShelvingState, BrowseNames.CurrentState));
         }
 
         return descriptors;
@@ -1483,6 +1565,18 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 OpcUaEventFieldKeys.SuppressedOrShelved,
                 OpcUaEventFieldKeys.SuppressedOrShelved,
                 CreateEventOperand(ObjectTypeIds.AlarmConditionType, Attributes.Value, BrowseNames.SuppressedOrShelved));
+            AddSelectClauseDescriptor(
+                descriptors,
+                knownKeys,
+                OpcUaEventFieldKeys.SuppressedStateId,
+                OpcUaEventFieldKeys.SuppressedStateId,
+                CreateEventOperand(ObjectTypeIds.AlarmConditionType, Attributes.Value, BrowseNames.SuppressedState, BrowseNames.Id));
+            AddSelectClauseDescriptor(
+                descriptors,
+                knownKeys,
+                OpcUaEventFieldKeys.ShelvingStateCurrentState,
+                OpcUaEventFieldKeys.ShelvingStateCurrentState,
+                CreateEventOperand(ObjectTypeIds.AlarmConditionType, Attributes.Value, BrowseNames.ShelvingState, BrowseNames.CurrentState));
         }
 
         return descriptors;
@@ -1524,7 +1618,8 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 child.BrowseName
             };
 
-            var key = GetBrowsePathKey(browsePath);
+            var key = GetSelectClauseKey(browsePath);
+            var displayName = GetSelectClauseDisplayName(browsePath);
             var attributeId = child.NodeClass == NodeClass.Variable
                 ? Attributes.Value
                 : Attributes.NodeId;
@@ -1533,7 +1628,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 descriptors,
                 knownKeys,
                 key,
-                key,
+                displayName,
                 new SimpleAttributeOperand
                 {
                     TypeDefinitionId = ObjectTypeIds.BaseEventType,
@@ -1785,6 +1880,28 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         };
     }
 
+    private static string GetSelectClauseKey(QualifiedNameCollection browsePath)
+    {
+        var knownKey = TryGetKnownEventFieldKey(browsePath);
+        if (!string.IsNullOrWhiteSpace(knownKey))
+        {
+            return knownKey;
+        }
+
+        return GetBrowsePathKey(browsePath);
+    }
+
+    private static string GetSelectClauseDisplayName(QualifiedNameCollection browsePath)
+    {
+        var knownKey = TryGetKnownEventFieldKey(browsePath);
+        if (!string.IsNullOrWhiteSpace(knownKey))
+        {
+            return knownKey;
+        }
+
+        return GetBrowsePathDisplayName(browsePath);
+    }
+
     private static string GetBrowsePathKey(QualifiedNameCollection browsePath)
     {
         if (browsePath == null || browsePath.Count == 0)
@@ -1796,7 +1913,79 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             ".",
             browsePath
                 .Where(static item => !QualifiedName.IsNull(item))
-                .Select(static item => item.Name));
+                .Select(GetQualifiedNameKey));
+    }
+
+    private static string GetBrowsePathDisplayName(QualifiedNameCollection browsePath)
+    {
+        if (browsePath == null || browsePath.Count == 0)
+        {
+            return OpcUaEventFieldKeys.NodeId;
+        }
+
+        return string.Join(
+            ".",
+            browsePath
+                .Where(static item => !QualifiedName.IsNull(item))
+                .Select(GetQualifiedNameDisplayName));
+    }
+
+    private static string? TryGetKnownEventFieldKey(QualifiedNameCollection browsePath)
+    {
+        if (browsePath == null || browsePath.Count == 0)
+        {
+            return OpcUaEventFieldKeys.NodeId;
+        }
+
+        var normalizedSegments = new List<string>(browsePath.Count);
+
+        foreach (var segment in browsePath)
+        {
+            if (QualifiedName.IsNull(segment) || segment.NamespaceIndex != 0)
+            {
+                return null;
+            }
+
+            normalizedSegments.Add(segment.Name);
+        }
+
+        return string.Join(".", normalizedSegments) switch
+        {
+            OpcUaEventFieldKeys.EventId => OpcUaEventFieldKeys.EventId,
+            OpcUaEventFieldKeys.EventType => OpcUaEventFieldKeys.EventType,
+            OpcUaEventFieldKeys.SourceNode => OpcUaEventFieldKeys.SourceNode,
+            OpcUaEventFieldKeys.SourceName => OpcUaEventFieldKeys.SourceName,
+            OpcUaEventFieldKeys.Time => OpcUaEventFieldKeys.Time,
+            OpcUaEventFieldKeys.ReceiveTime => OpcUaEventFieldKeys.ReceiveTime,
+            OpcUaEventFieldKeys.Message => OpcUaEventFieldKeys.Message,
+            OpcUaEventFieldKeys.Severity => OpcUaEventFieldKeys.Severity,
+            OpcUaEventFieldKeys.ConditionId => OpcUaEventFieldKeys.ConditionId,
+            OpcUaEventFieldKeys.ConditionName => OpcUaEventFieldKeys.ConditionName,
+            OpcUaEventFieldKeys.Retain => OpcUaEventFieldKeys.Retain,
+            OpcUaEventFieldKeys.EnabledStateId => OpcUaEventFieldKeys.EnabledStateId,
+            OpcUaEventFieldKeys.ActiveStateId => OpcUaEventFieldKeys.ActiveStateId,
+            OpcUaEventFieldKeys.AckedStateId => OpcUaEventFieldKeys.AckedStateId,
+            OpcUaEventFieldKeys.SuppressedOrShelved => OpcUaEventFieldKeys.SuppressedOrShelved,
+            OpcUaEventFieldKeys.SuppressedStateId => OpcUaEventFieldKeys.SuppressedStateId,
+            OpcUaEventFieldKeys.ShelvingStateCurrentState => OpcUaEventFieldKeys.ShelvingStateCurrentState,
+            _ => null
+        };
+    }
+
+    private static string GetQualifiedNameKey(QualifiedName qualifiedName)
+    {
+        return qualifiedName.NamespaceIndex == 0
+            ? qualifiedName.Name
+            : string.Format(
+                CultureInfo.InvariantCulture,
+                "ns={0}:{1}",
+                qualifiedName.NamespaceIndex,
+                qualifiedName.Name);
+    }
+
+    private static string GetQualifiedNameDisplayName(QualifiedName qualifiedName)
+    {
+        return GetQualifiedNameKey(qualifiedName);
     }
 
     private static bool IsRefreshBoundaryEvent(string eventTypeNodeId)
@@ -1949,6 +2138,68 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
 
         return fields[index].Value;
+    }
+
+    private static async Task RollbackEventMonitoredItemsAsync(
+        OpcUaEventSubscriptionHandle subscription,
+        IReadOnlyList<OpcUaEventMonitoredItemRegistration> monitoredItems,
+        CancellationToken ct)
+    {
+        subscription.Subscription.RemoveItems(monitoredItems.Select(static item => item.MonitoredItem));
+        OpcUaEventSubscriptionHandle.DetachHandlers(monitoredItems);
+
+        try
+        {
+            await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
+        }
+        catch when (!ct.IsCancellationRequested)
+        {
+            // Best effort rollback.
+        }
+    }
+
+    private static bool CanRetryWithoutSuppressedOrShelvedServerFilter(Exception exception)
+    {
+        if (exception is AggregateException aggregateException)
+        {
+            return aggregateException.InnerExceptions.Any(CanRetryWithoutSuppressedOrShelvedServerFilter);
+        }
+
+        if (exception is ServiceResultException serviceResultException)
+        {
+            var symbolicId = StatusCodes.LookupSymbolicId(Convert.ToUInt32(serviceResultException.StatusCode, CultureInfo.InvariantCulture));
+            if (!string.IsNullOrWhiteSpace(symbolicId) &&
+                (symbolicId.IndexOf("Filter", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 symbolicId.IndexOf("Event", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                return true;
+            }
+        }
+
+        var message = exception.Message;
+        return !string.IsNullOrWhiteSpace(message) &&
+               (message.IndexOf("filter", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("where clause", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("suppressed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("shelved", StringComparison.OrdinalIgnoreCase) >= 0);
+    }
+
+    private static bool ShouldIgnoreSuppressedOrShelvedEvent(
+        IReadOnlyDictionary<string, object?> fields)
+    {
+        if (GetBooleanField(fields, OpcUaEventFieldKeys.SuppressedOrShelved) == true)
+        {
+            return true;
+        }
+
+        if (GetBooleanField(fields, OpcUaEventFieldKeys.SuppressedStateId) == true)
+        {
+            return true;
+        }
+
+        var shelvingState = GetStringField(fields, OpcUaEventFieldKeys.ShelvingStateCurrentState);
+        return !string.IsNullOrWhiteSpace(shelvingState) &&
+               !string.Equals(shelvingState, "Unshelved", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task EnsureSourceNodeSupportsEventsAsync(

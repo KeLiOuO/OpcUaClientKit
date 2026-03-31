@@ -20,6 +20,8 @@ internal static class OpcUaEventFieldKeys
     public const string ActiveStateId = "ActiveState.Id";
     public const string AckedStateId = "AckedState.Id";
     public const string SuppressedOrShelved = "SuppressedOrShelved";
+    public const string SuppressedStateId = "SuppressedState.Id";
+    public const string ShelvingStateCurrentState = "ShelvingState.CurrentState";
 }
 
 internal sealed class OpcUaEventFilterDefinition
