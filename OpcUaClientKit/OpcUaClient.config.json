@@ -1,0 +1,189 @@
+{
+  // 应用级共享配置。
+  "application": {
+    // OPC UA 客户端基础名称。
+    // 证书 CN、ApplicationUri、ProductUri 都会基于它生成。
+    "applicationName": "OpcUaClientKitDemo",
+
+    // 证书主题中的组织名。
+    // 留空时证书主题只保留 CN，不再附加 O 字段。
+    "organizationName": ""
+  },
+
+  // 安全与证书相关配置。
+  "security": {
+    // 应用证书支持的证书类型列表。
+    // 程序会为列表中的每种类型准备一套可选应用证书。
+    "certificateTypes": [
+      "RsaSha256",
+      "NistP256",
+      "NistP384",
+      "BrainpoolP256r1",
+      "BrainpoolP384r1"
+    ],
+
+    // rejected 证书目录中最多保留多少张被拒证书。
+    "maxRejectedCertificates": 5,
+
+    // 是否自动接受未受信任的服务端证书。
+    // 开发联调时可临时打开，正式环境通常保持 false。
+    "autoAcceptUntrustedCertificates": false,
+
+    // 是否拒绝使用 SHA1 签名的证书。
+    "rejectSHA1SignedCertificates": true,
+
+    // 是否拒绝吊销状态未知的证书。
+    "rejectUnknownRevocationStatus": true,
+
+    // 客户端应用证书允许的最小密钥长度。
+    "minimumCertificateKeySize": 2048,
+
+    // 是否把本应用证书自动加入本地 trusted store。
+    "addAppCertToTrustedStore": false,
+
+    // 连接时是否发送完整证书链，而不是只发送叶子证书。
+    "sendCertificateChain": true
+  },
+
+  // 通信层配额与超时设置。
+  "transport": {
+    // 单次操作超时时间，单位毫秒。
+    "operationTimeout": 30000,
+
+    // 单个字符串允许的最大长度。
+    "maxStringLength": 10485760,
+
+    // 单个 ByteString 允许的最大长度。
+    "maxByteStringLength": 10485760,
+
+    // 数组允许的最大元素数量。
+    "maxArrayLength": 65535,
+
+    // 单条 OPC UA 消息允许的最大大小，单位字节。
+    "maxMessageSize": 4194304,
+
+    // 通信缓冲区允许的最大大小，单位字节。
+    "maxBufferSize": 65535,
+
+    // 通道生命周期，单位毫秒。
+    "channelLifetime": 300000,
+
+    // 安全令牌生命周期，单位毫秒。
+    "securityTokenLifetime": 3600000
+  },
+
+  // 客户端会话与操作行为配置。
+  "client": {
+    // 默认会话超时时间，单位毫秒。
+    "defaultSessionTimeout": 60000,
+
+    // 常用发现地址模板。
+    // {0} 会被替换为目标主机名，当前 demo 主要保留为 SDK 配置项。
+    "wellKnownDiscoveryUrls": [
+      "opc.tcp://{0}:4840",
+      "http://{0}:52601/UADiscovery",
+      "http://{0}/UADiscovery/Default.svc"
+    ],
+
+    // 最小订阅生命周期，单位毫秒。
+    "minSubscriptionLifetime": 10000,
+
+    // 各类批量操作的数量上限。
+    "operationLimits": {
+      // 单次读取允许的最大节点数。
+      "maxNodesPerRead": 2500,
+
+      // 单次历史数据读取允许的最大节点数。
+      "maxNodesPerHistoryReadData": 1000,
+
+      // 单次历史事件读取允许的最大节点数。
+      "maxNodesPerHistoryReadEvents": 1000,
+
+      // 单次写入允许的最大节点数。
+      "maxNodesPerWrite": 2500,
+
+      // 单次历史数据更新允许的最大节点数。
+      "maxNodesPerHistoryUpdateData": 1000,
+
+      // 单次历史事件更新允许的最大节点数。
+      "maxNodesPerHistoryUpdateEvents": 1000,
+
+      // 单次方法调用允许的最大节点数。
+      "maxNodesPerMethodCall": 2500,
+
+      // 单次 Browse 允许的最大节点数。
+      "maxNodesPerBrowse": 2500,
+
+      // 单次 RegisterNodes 允许的最大节点数。
+      "maxNodesPerRegisterNodes": 2500,
+
+      // 单次 BrowsePath 转 NodeId 允许的最大节点数。
+      "maxNodesPerTranslateBrowsePathsToNodeIds": 2500,
+
+      // 单次节点管理操作允许的最大节点数。
+      "maxNodesPerNodeManagement": 2500,
+
+      // 单次监控项调用允许的最大数量。
+      "maxMonitoredItemsPerCall": 2500
+    }
+  },
+
+  // 日志输出配置。
+  "trace": {
+    // 日志文件名。
+    // 最终完整路径会在运行时按设备目录拼出。
+    "outputFileName": "OpcUaClientKitDemo.log.txt",
+
+    // 程序启动时是否删除旧日志文件。
+    "deleteOnLoad": true
+  },
+
+  // 设备列表。每个对象代表一台可连接设备。
+  "devices": [
+    {
+      // 设备唯一标识。
+      // 同时用于生成该设备独立的本地证书目录和应用名后缀。
+      "id": "device-a",
+
+      // 设备显示名称，仅用于输出和区分。
+      "displayName": "Device A",
+
+      // 是否启用这台设备。
+      // demo 只会连接 enabled=true 的设备。
+      "enabled": true,
+
+      // OPC UA 服务端地址。
+      "endpointUrl": "opc.tcp://127.0.0.1:4840",
+
+      // 是否优先选择启用安全策略的 endpoint。
+      "useSecurity": true,
+
+      // 创建 Session 时是否检查证书域名。
+      "checkDomain": false,
+
+      // 会话名称。
+      // 留空时会回退到程序生成的应用名。
+      "sessionName": "Device A Session",
+
+      // 用户名。
+      // 留空时按匿名认证处理。
+      "userName": "OpcUaClient",
+
+      // 用户密码。
+      // 仅在用户名密码认证模式下使用。
+      "password": "123456"
+    },
+    {
+      // 第二台设备配置，字段含义与上面的设备对象一致。
+      "id": "device-b",
+      "displayName": "Device B",
+      "enabled": true,
+      "endpointUrl": "opc.tcp://127.0.0.1:4840",
+      "useSecurity": true,
+      "checkDomain": false,
+      "sessionName": "Device B Session",
+      "userName": "OpcUaClient",
+      "password": "123456"
+    }
+  ]
+}

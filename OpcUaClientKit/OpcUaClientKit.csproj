@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>OpcUaClientKit</AssemblyName>
+    <RootNamespace>OpcUaClientKit</RootNamespace>
+    <PackageId>OpcUaClientKit</PackageId>
+    <Description>Lightweight reusable OPC UA client library with factory and builder support.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.378.106" />
+  </ItemGroup>
+
+</Project>
