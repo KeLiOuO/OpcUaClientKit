@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="OpcUaClientKit.Demo/OpcUaClientKit.Demo.csproj" />
   <Project Path="OpcUaClientKit.RegressionTests/OpcUaClientKit.RegressionTests.csproj" />
+  <Project Path="OpcUaClientKit.UnitTests/OpcUaClientKit.UnitTests.csproj" />
   <Project Path="OpcUaClientKit/OpcUaClientKit.csproj" />
 </Solution>

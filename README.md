@@ -14,6 +14,8 @@ This repository includes the core library, a structured console demo, and regres
   - A console demo that shows the recommended usage patterns
 - `OpcUaClientKit.RegressionTests`
   - Integration-style regression tests for read/write, method calls, data subscriptions, and alarm event subscriptions
+- `OpcUaClientKit.UnitTests`
+  - Focused unit tests for concurrency, diagnostics, and batch error semantics
 - `OpcUaClientKit.slnx`
   - The solution entry point
 
@@ -43,6 +45,7 @@ This repository includes the core library, a structured console demo, and regres
 |   `-- Subscriptions
 |-- OpcUaClientKit.Demo
 |-- OpcUaClientKit.RegressionTests
+|-- OpcUaClientKit.UnitTests
 `-- OpcUaClientKit.slnx
 ```
 
@@ -64,6 +67,12 @@ Run regression tests:
 
 ```bash
 dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+```
+
+Run focused unit tests:
+
+```bash
+dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 ```
 
 ## Documentation

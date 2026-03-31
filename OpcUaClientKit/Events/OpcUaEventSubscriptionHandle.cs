@@ -17,6 +17,11 @@ internal sealed class OpcUaEventSubscriptionHandle : IOpcUaEventSubscription
         Subscription subscription,
         IReadOnlyList<OpcUaEventMonitoredItemRegistration> monitoredItems,
         OpcUaSubscriptionState state,
+        OpcUaEventFilterDefinition filterDefinition,
+        uint queueSize,
+        bool discardOldest,
+        bool conditionRefreshOnStart,
+        Action<OpcUaEventNotification> onEvent,
         Func<OpcUaEventSubscriptionHandle, IReadOnlyList<OpcUaNode>, CancellationToken, Task> addSourcesAsync,
         Func<OpcUaEventSubscriptionHandle, IReadOnlyList<string>, CancellationToken, Task> removeSourcesAsync,
         Func<OpcUaEventSubscriptionHandle, CancellationToken, Task> refreshAsync,
@@ -31,6 +36,11 @@ internal sealed class OpcUaEventSubscriptionHandle : IOpcUaEventSubscription
 
         _registrations = monitoredItems.ToDictionary(static item => item.SourceNodeId, StringComparer.Ordinal);
         _state = state ?? throw new ArgumentNullException(nameof(state));
+        FilterDefinition = filterDefinition ?? throw new ArgumentNullException(nameof(filterDefinition));
+        QueueSize = queueSize;
+        DiscardOldest = discardOldest;
+        ConditionRefreshOnStart = conditionRefreshOnStart;
+        OnEvent = onEvent ?? throw new ArgumentNullException(nameof(onEvent));
         _addSourcesAsync = addSourcesAsync ?? throw new ArgumentNullException(nameof(addSourcesAsync));
         _removeSourcesAsync = removeSourcesAsync ?? throw new ArgumentNullException(nameof(removeSourcesAsync));
         _refreshAsync = refreshAsync ?? throw new ArgumentNullException(nameof(refreshAsync));
@@ -46,6 +56,16 @@ internal sealed class OpcUaEventSubscriptionHandle : IOpcUaEventSubscription
     internal Subscription Subscription { get; }
 
     internal OpcUaSubscriptionState State => _state;
+
+    internal OpcUaEventFilterDefinition FilterDefinition { get; }
+
+    internal uint QueueSize { get; }
+
+    internal bool DiscardOldest { get; }
+
+    internal bool ConditionRefreshOnStart { get; }
+
+    internal Action<OpcUaEventNotification> OnEvent { get; }
 
     public Task AddSourceAsync(string sourceNodeId, CancellationToken ct = default)
     {

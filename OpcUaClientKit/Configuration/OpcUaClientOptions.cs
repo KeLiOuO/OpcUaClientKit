@@ -59,8 +59,16 @@ public sealed class OpcUaClientOptions
 
     /// <summary>
     /// Gets or sets the password used together with <see cref="UserName"/>.
+    /// This value is kept as a managed <see cref="string"/> and therefore remains in memory in plaintext.
+    /// Avoid reusing highly sensitive credentials longer than necessary.
     /// </summary>
     public string? Password { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional callback used to receive non-fatal client diagnostics such as
+    /// swallowed subscription callback exceptions or event-filter fallback warnings.
+    /// </summary>
+    public Action<OpcUaClientDiagnosticEvent>? DiagnosticsHandler { get; set; }
 
     /// <summary>
     /// Gets or sets certificate and PKI related options.
@@ -84,6 +92,7 @@ public sealed class OpcUaClientOptions
             CheckDomain = CheckDomain,
             UserName = UserName,
             Password = Password,
+            DiagnosticsHandler = DiagnosticsHandler,
             Certificate = Certificate.Clone()
         };
     }

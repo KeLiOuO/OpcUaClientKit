@@ -19,6 +19,7 @@
 - OPC UA 方法调用
 - 数据订阅
 - 报警事件订阅
+- 客户端级诊断钩子，用于观察订阅回调异常和事件过滤降级告警
 - 同时支持原始 `nodeId` 和封装后的 `OpcUaNode`
 
 ## 目标框架
@@ -120,6 +121,10 @@ var client = await factory
     .WithOperationTimeout(30000)
     .WithCheckDomain(false)
     .WithAutoAcceptUntrustedServerCertificate(true)
+    .WithDiagnosticsHandler(diagnostic =>
+    {
+        Console.WriteLine($"{diagnostic.Kind}: {diagnostic.Message}");
+    })
     .BuildConnectedAsync();
 ```
 
@@ -135,6 +140,7 @@ var options = new OpcUaClientOptions
     Password = "123456",
     UseSecurity = true,
     SessionTimeout = 60000,
+    DiagnosticsHandler = diagnostic => Console.WriteLine(diagnostic.Message),
     Certificate =
     {
         AutoAcceptUntrustedServerCertificate = true
@@ -143,6 +149,11 @@ var options = new OpcUaClientOptions
 
 await using var client = await factory.CreateConnectedAsync(options);
 ```
+
+注意：
+
+- `Password` 当前仍以普通 `string` 形式保留在托管内存中，这是当前 API 设计下的既定行为
+- `DisconnectAsync()` 或重新 `ConnectAsync()` 后，之前拿到的订阅句柄会失效，需要重新创建
 
 ## 节点封装
 
@@ -174,6 +185,31 @@ var values = await client.ReadNodesAsync(new[]
 });
 ```
 
+如果服务端对部分节点返回坏状态，批量读取会抛出 `OpcUaBatchReadException`，并把已经成功读取到的值放在异常里：
+
+```csharp
+try
+{
+    var values = await client.ReadNodesAsync(new[]
+    {
+        "ns=3;s=/Plc/DB66.DBW0",
+        "ns=3;s=/Plc/DB66.DBW2"
+    });
+}
+catch (OpcUaBatchReadException ex)
+{
+    foreach (var pair in ex.SuccessfulValues)
+    {
+        Console.WriteLine($"SUCCESS {pair.Key} = {pair.Value}");
+    }
+
+    foreach (var failure in ex.Failures)
+    {
+        Console.WriteLine($"FAIL {failure.NodeId} {failure.SymbolicId}");
+    }
+}
+```
+
 单节点写入：
 
 ```csharp
@@ -189,6 +225,8 @@ await client.WriteNodesAsync(new Dictionary<string, object?>
     ["ns=3;s=/Plc/DB66.DBW2"] = (short)3
 });
 ```
+
+批量写入同样采用“聚合失败”语义。若部分节点写失败，会抛出 `OpcUaBatchWriteException`，其中同时包含成功节点和失败节点信息。
 
 也可以直接使用 `OpcUaNode`：
 
@@ -253,6 +291,11 @@ await subscription.AddNodesAsync(new[]
 });
 ```
 
+说明：
+
+- 订阅回调中的用户代码如果抛异常，不会打断底层订阅管线
+- 这些异常会通过 `OpcUaClientOptions.DiagnosticsHandler` / `WithDiagnosticsHandler(...)` 暴露出来，方便接入日志或监控
+
 ## 报警事件订阅
 
 创建空事件订阅组，再动态添加事件源：
@@ -284,6 +327,7 @@ await subscription.AddSourceAsync(new OpcUaNode("ns=6;s=MyObjectsFolder", "MyObj
 - 默认会在添加事件源后执行 `ConditionRefresh`
 - `Refresh Start` / `Refresh End` 已在库内过滤
 - `SelectedFields` 会按实际 `SelectClauses` 顺序返回，适合调试和通用表格展示
+- 当开启 `IgnoreSuppressedOrShelved` 且服务端不支持对应服务器端过滤时，客户端会自动回退到客户端侧过滤，并通过诊断钩子发出 `EventFilterFallbackWarning`
 
 ## 项目结构
 
@@ -335,6 +379,7 @@ Demo 配置文件：
 当前解决方案还包含一个基于真实服务器联调的回归测试项目：
 
 - `OpcUaClientKit.RegressionTests`
+- `OpcUaClientKit.UnitTests`
 
 默认测试场景基于本地 `Prosys OPC UA Simulation Server`，覆盖：
 
@@ -348,6 +393,10 @@ Demo 配置文件：
 
 ```bash
 dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+```
+
+```bash
+dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 ```
 
 ## 当前边界

@@ -14,6 +14,8 @@
   - 规范化的控制台示例项目，演示推荐用法
 - `OpcUaClientKit.RegressionTests`
   - 面向真实 OPC UA 服务端的回归测试项目，覆盖读写、方法调用、数据订阅和报警事件订阅
+- `OpcUaClientKit.UnitTests`
+  - 面向并发、诊断能力和批量错误语义的单元测试项目
 - `OpcUaClientKit.slnx`
   - 解决方案入口
 
@@ -43,6 +45,7 @@
 |   `-- Subscriptions
 |-- OpcUaClientKit.Demo
 |-- OpcUaClientKit.RegressionTests
+|-- OpcUaClientKit.UnitTests
 `-- OpcUaClientKit.slnx
 ```
 
@@ -64,6 +67,12 @@ dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.
 
 ```bash
 dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+```
+
+运行单元测试：
+
+```bash
+dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 ```
 
 ## 文档入口

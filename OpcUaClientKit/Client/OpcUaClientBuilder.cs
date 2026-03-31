@@ -97,6 +97,16 @@ public sealed class OpcUaClientBuilder
     }
 
     /// <summary>
+    /// Registers a client-level diagnostics handler used to observe non-fatal subscription callback
+    /// exceptions and other recoverable warnings.
+    /// </summary>
+    public OpcUaClientBuilder WithDiagnosticsHandler(Action<OpcUaClientDiagnosticEvent> handler)
+    {
+        _options.DiagnosticsHandler = handler ?? throw new ArgumentNullException(nameof(handler));
+        return this;
+    }
+
+    /// <summary>
     /// Overrides the default PKI root directory used by the SDK.
     /// </summary>
     public OpcUaClientBuilder WithPkiRootPath(string pkiRootPath)

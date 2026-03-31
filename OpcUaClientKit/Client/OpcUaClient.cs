@@ -7,6 +7,21 @@ namespace OpcUaClientKit;
 internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribableOpcUaClient
 {
     private static readonly ITelemetryContext s_telemetry = DefaultTelemetry.Create(_ => { });
+    private static readonly HashSet<uint> s_retryableSuppressedOrShelvedFilterStatusCodes = new()
+    {
+        StatusCodes.BadEventFilterInvalid,
+        StatusCodes.BadFilterNotAllowed,
+        StatusCodes.BadContentFilterInvalid,
+        StatusCodes.BadFilterOperandInvalid,
+        StatusCodes.BadFilterOperatorInvalid,
+        StatusCodes.BadFilterOperatorUnsupported,
+        StatusCodes.BadFilterOperandCountMismatch,
+        StatusCodes.BadFilterElementInvalid,
+        StatusCodes.BadFilterLiteralInvalid,
+        StatusCodes.BadMonitoredItemFilterInvalid,
+        StatusCodes.BadMonitoredItemFilterUnsupported
+    };
+
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly object _subscriptionsLock = new();
     private readonly List<OpcUaSubscriptionHandle> _subscriptions = new();
@@ -33,6 +48,8 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            ThrowIfDisposedUnsafe();
+
             if (IsConnected)
             {
                 return;
@@ -40,10 +57,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
             if (_connection != null)
             {
-                await UnsubscribeAllUnsafeAsync(ct).ConfigureAwait(false);
-                await UnsubscribeAllEventSubscriptionsUnsafeAsync(ct).ConfigureAwait(false);
-                await CloseConnectionAsync(_connection, ct).ConfigureAwait(false);
-                _connection = null;
+                await DisconnectCoreUnsafeAsync(ct).ConfigureAwait(false);
             }
 
             _connection = await _connectAsync(_options, ct).ConfigureAwait(false);
@@ -56,23 +70,10 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
     public async Task DisconnectAsync(CancellationToken ct = default)
     {
-        if (_disposed && _connection == null)
-        {
-            return;
-        }
-
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_connection == null)
-            {
-                return;
-            }
-
-            await UnsubscribeAllUnsafeAsync(ct).ConfigureAwait(false);
-            await UnsubscribeAllEventSubscriptionsUnsafeAsync(ct).ConfigureAwait(false);
-            await CloseConnectionAsync(_connection, ct).ConfigureAwait(false);
-            _connection = null;
+            await DisconnectCoreUnsafeAsync(ct).ConfigureAwait(false);
         }
         finally
         {
@@ -266,16 +267,37 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             throw new ArgumentNullException(nameof(onChanged));
         }
 
-        var subscription = await CreateSubscriptionBuilder().BuildAsync(ct).ConfigureAwait(false);
+        var request = CreateDefaultSubscriptionBuildRequest();
+        var normalizedNodes = NormalizeSubscriptionNodes(
+            new[]
+            {
+                new OpcUaSubscriptionItemDefinition(normalizedNode, onChanged, new OpcUaMonitoredItemOptions())
+            },
+            nameof(node));
+
+        await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await subscription.AddNodeAsync(normalizedNode, onChanged, ct).ConfigureAwait(false);
-            return subscription;
+            ThrowIfDisposedUnsafe();
+
+            var session = GetRequiredSession();
+            var subscription = (OpcUaSubscriptionHandle)await BuildSubscriptionUnsafeAsync(session, request, ct)
+                .ConfigureAwait(false);
+
+            try
+            {
+                await AddSubscriptionNodesUnsafeAsync(subscription, normalizedNodes, ct).ConfigureAwait(false);
+                return subscription;
+            }
+            catch
+            {
+                await UnsubscribeSubscriptionUnsafeAsync(subscription, ct).ConfigureAwait(false);
+                throw;
+            }
         }
-        catch
+        finally
         {
-            await subscription.DisposeAsync().ConfigureAwait(false);
-            throw;
+            _syncLock.Release();
         }
     }
 
@@ -307,19 +329,39 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             throw new ArgumentNullException(nameof(onEvent));
         }
 
-        var subscription = await CreateEventSubscriptionBuilder()
-            .BuildAsync(onEvent, ct)
-            .ConfigureAwait(false);
+        var request = CreateDefaultEventSubscriptionBuildRequest(onEvent);
+        var normalizedSourceNodes = NormalizeNodes(new[] { normalizedSourceNode }, nameof(sourceNode));
 
+        await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await subscription.AddSourceAsync(normalizedSourceNode, ct).ConfigureAwait(false);
-            return subscription;
+            ThrowIfDisposedUnsafe();
+
+            var session = GetRequiredSession();
+            var subscription = (OpcUaEventSubscriptionHandle)await BuildEventSubscriptionUnsafeAsync(
+                    session,
+                    request,
+                    ct)
+                .ConfigureAwait(false);
+
+            try
+            {
+                await AddEventSourcesUnsafeAsync(
+                        subscription,
+                        normalizedSourceNodes,
+                        ct)
+                    .ConfigureAwait(false);
+                return subscription;
+            }
+            catch
+            {
+                await UnsubscribeEventSubscriptionUnsafeAsync(subscription, ct).ConfigureAwait(false);
+                throw;
+            }
         }
-        catch
+        finally
         {
-            await subscription.DisposeAsync().ConfigureAwait(false);
-            throw;
+            _syncLock.Release();
         }
     }
 
@@ -340,6 +382,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            ThrowIfDisposedUnsafe();
             var session = GetRequiredSession();
             return await BuildSubscriptionUnsafeAsync(session, normalizedRequest, ct).ConfigureAwait(false);
         }
@@ -360,6 +403,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            ThrowIfDisposedUnsafe();
             var session = GetRequiredSession();
             return await BuildEventSubscriptionUnsafeAsync(session, normalizedRequest, ct).ConfigureAwait(false);
         }
@@ -371,20 +415,20 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-
+        await _syncLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            await DisconnectAsync().ConfigureAwait(false);
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            await DisconnectCoreUnsafeAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
-            _syncLock.Dispose();
+            _syncLock.Release();
             GC.SuppressFinalize(this);
         }
     }
@@ -402,19 +446,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             throw new InvalidOperationException("The OPC UA server returned an unexpected number of read results.");
         }
 
-        var results = new Dictionary<string, object?>(normalizedNodeIds.Count, StringComparer.Ordinal);
-        for (var i = 0; i < normalizedNodeIds.Count; i++)
-        {
-            var statusCode = dataValues[i].StatusCode;
-            if (StatusCode.IsBad(statusCode))
-            {
-                throw new ServiceResultException(statusCode, $"Failed to read node '{normalizedNodeIds[i]}'.");
-            }
-
-            results[normalizedNodeIds[i]] = dataValues[i].Value;
-        }
-
-        return results;
+        return BuildReadResults(normalizedNodeIds, dataValues);
     }
 
     private static void EnsureReadSucceeded(DataValue dataValue, string nodeId)
@@ -508,14 +540,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             throw new InvalidOperationException("The OPC UA server returned an unexpected number of write results.");
         }
 
-        for (var i = 0; i < normalizedNodeValues.Count; i++)
-        {
-            var statusCode = results[i];
-            if (StatusCode.IsBad(statusCode))
-            {
-                throw new ServiceResultException(statusCode, $"Failed to write node '{normalizedNodeValues[i].Key}'.");
-            }
-        }
+        EnsureWriteResultsSucceeded(normalizedNodeValues, results);
     }
 
     private static async Task<IReadOnlyList<object?>> CallMethodCoreAsync(
@@ -656,15 +681,12 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 subscription,
                 Array.Empty<OpcUaEventMonitoredItemRegistration>(),
                 state,
-                (eventSubscription, sourceNodes, innerCt) => AddEventSourcesAsync(
-                    eventSubscription,
-                    sourceNodes,
-                    eventFilterDefinition,
-                    request.QueueSize,
-                    request.DiscardOldest,
-                    request.ConditionRefreshOnStart,
-                    request.OnEvent,
-                    innerCt),
+                eventFilterDefinition,
+                request.QueueSize,
+                request.DiscardOldest,
+                request.ConditionRefreshOnStart,
+                request.OnEvent,
+                AddEventSourcesAsync,
                 RemoveEventSourcesAsync,
                 RefreshEventSubscriptionAsync,
                 UnsubscribeEventSubscriptionAsync);
@@ -676,6 +698,49 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         {
             state.TryDeactivate();
             await RemoveSubscriptionFromSessionAsync(session, subscription, ct).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task AddSubscriptionNodesUnsafeAsync(
+        OpcUaSubscriptionHandle subscription,
+        IReadOnlyList<OpcUaSubscriptionItemDefinition> normalizedNodes,
+        CancellationToken ct)
+    {
+        subscription.EnsureActive();
+        _ = GetRequiredSession();
+
+        foreach (var node in normalizedNodes)
+        {
+            if (subscription.ContainsNode(node.NodeId))
+            {
+                throw new InvalidOperationException(
+                    $"Node '{node.NodeId}' is already part of subscription '{subscription.Name}'.");
+            }
+        }
+
+        var monitoredItems = CreateMonitoredItemRegistrations(normalizedNodes, subscription.State);
+        subscription.Subscription.AddItems(monitoredItems.Select(static item => item.MonitoredItem));
+
+        try
+        {
+            await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
+            subscription.AddRegistrations(monitoredItems);
+        }
+        catch
+        {
+            subscription.Subscription.RemoveItems(monitoredItems.Select(static item => item.MonitoredItem));
+            OpcUaSubscriptionHandle.DetachHandlers(monitoredItems);
+
+            try
+            {
+                await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
+            }
+            catch when (!ct.IsCancellationRequested)
+            {
+                // Best effort rollback.
+            }
+
             throw;
         }
     }
@@ -692,42 +757,8 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            subscription.EnsureActive();
-            _ = GetRequiredSession();
-
-            foreach (var node in normalizedNodes)
-            {
-                if (subscription.ContainsNode(node.NodeId))
-                {
-                    throw new InvalidOperationException(
-                        $"Node '{node.NodeId}' is already part of subscription '{subscription.Name}'.");
-                }
-            }
-
-            var monitoredItems = CreateMonitoredItemRegistrations(normalizedNodes, subscription.State);
-            subscription.Subscription.AddItems(monitoredItems.Select(static item => item.MonitoredItem));
-
-            try
-            {
-                await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
-                subscription.AddRegistrations(monitoredItems);
-            }
-            catch
-            {
-                subscription.Subscription.RemoveItems(monitoredItems.Select(static item => item.MonitoredItem));
-                OpcUaSubscriptionHandle.DetachHandlers(monitoredItems);
-
-                try
-                {
-                    await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
-                }
-                catch when (!ct.IsCancellationRequested)
-                {
-                    // Best effort rollback.
-                }
-
-                throw;
-            }
+            ThrowIfDisposedUnsafe();
+            await AddSubscriptionNodesUnsafeAsync(subscription, normalizedNodes, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -747,6 +778,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            ThrowIfDisposedUnsafe();
             subscription.EnsureActive();
             _ = GetRequiredSession();
 
@@ -781,14 +813,87 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
     }
 
+    private async Task AddEventSourcesUnsafeAsync(
+        OpcUaEventSubscriptionHandle subscription,
+        IReadOnlyList<OpcUaNode> normalizedSourceNodes,
+        CancellationToken ct)
+    {
+        subscription.EnsureActive();
+        var session = GetRequiredSession();
+
+        foreach (var sourceNode in normalizedSourceNodes)
+        {
+            if (subscription.ContainsSource(sourceNode.NodeId))
+            {
+                throw new InvalidOperationException(
+                    $"Source node '{sourceNode.NodeId}' is already part of event subscription '{subscription.Name}'.");
+            }
+
+            await EnsureSourceNodeSupportsEventsAsync(session, sourceNode.NodeId, ct).ConfigureAwait(false);
+        }
+
+        var filterDefinition = subscription.FilterDefinition;
+        var useServerSideSuppressedOrShelvedFilter = filterDefinition.IgnoreSuppressedOrShelved;
+
+        while (true)
+        {
+            var monitoredItems = CreateEventMonitoredItemRegistrations(
+                normalizedSourceNodes,
+                filterDefinition,
+                subscription.QueueSize,
+                subscription.DiscardOldest,
+                subscription.OnEvent,
+                subscription.State,
+                useServerSideSuppressedOrShelvedFilter);
+
+            subscription.Subscription.AddItems(monitoredItems.Select(static item => item.MonitoredItem));
+
+            try
+            {
+                await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                await RollbackEventMonitoredItemsAsync(subscription, monitoredItems, ct).ConfigureAwait(false);
+
+                if (useServerSideSuppressedOrShelvedFilter &&
+                    filterDefinition.CanFallbackToClientSideSuppressedOrShelvedFilter &&
+                    CanRetryWithoutSuppressedOrShelvedServerFilter(exception))
+                {
+                    useServerSideSuppressedOrShelvedFilter = false;
+                    ReportDiagnostic(
+                        OpcUaClientDiagnosticKind.EventFilterFallbackWarning,
+                        $"The server rejected the SuppressedOrShelved filter for event subscription '{subscription.Name}'. Falling back to client-side filtering.",
+                        exception,
+                        subscription.Name,
+                        string.Join(", ", normalizedSourceNodes.Select(static node => node.NodeId)));
+                    continue;
+                }
+
+                throw;
+            }
+
+            try
+            {
+                if (subscription.ConditionRefreshOnStart)
+                {
+                    await subscription.Subscription.ConditionRefreshAsync(ct).ConfigureAwait(false);
+                }
+
+                subscription.AddRegistrations(monitoredItems);
+                break;
+            }
+            catch
+            {
+                await RollbackEventMonitoredItemsAsync(subscription, monitoredItems, ct).ConfigureAwait(false);
+                throw;
+            }
+        }
+    }
+
     private async Task AddEventSourcesAsync(
         OpcUaEventSubscriptionHandle subscription,
         IReadOnlyList<OpcUaNode> sourceNodes,
-        OpcUaEventFilterDefinition filterDefinition,
-        uint queueSize,
-        bool discardOldest,
-        bool conditionRefreshOnStart,
-        Action<OpcUaEventNotification> onEvent,
         CancellationToken ct)
     {
         ThrowIfDisposed();
@@ -798,77 +903,12 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            subscription.EnsureActive();
-            var session = GetRequiredSession();
-
-            // Validate all requested sources before touching the live subscription so callers
-            // either add the whole batch successfully or fail before any server-side mutation.
-            foreach (var sourceNode in normalizedSourceNodes)
-            {
-                if (subscription.ContainsSource(sourceNode.NodeId))
-                {
-                    throw new InvalidOperationException(
-                        $"Source node '{sourceNode.NodeId}' is already part of event subscription '{subscription.Name}'.");
-                }
-
-                await EnsureSourceNodeSupportsEventsAsync(session, sourceNode.NodeId, ct).ConfigureAwait(false);
-            }
-
-            var useServerSideSuppressedOrShelvedFilter = filterDefinition.IgnoreSuppressedOrShelved;
-
-            while (true)
-            {
-                // Build registrations against the current filter mode. If the server rejects the
-                // SuppressedOrShelved predicate we can retry once with client-side filtering only.
-                var monitoredItems = CreateEventMonitoredItemRegistrations(
+            ThrowIfDisposedUnsafe();
+            await AddEventSourcesUnsafeAsync(
+                    subscription,
                     normalizedSourceNodes,
-                    filterDefinition,
-                    queueSize,
-                    discardOldest,
-                    onEvent,
-                    subscription.State,
-                    useServerSideSuppressedOrShelvedFilter);
-
-                subscription.Subscription.AddItems(monitoredItems.Select(static item => item.MonitoredItem));
-
-                try
-                {
-                    await subscription.Subscription.ApplyChangesAsync(ct).ConfigureAwait(false);
-                }
-                catch (Exception exception)
-                {
-                    await RollbackEventMonitoredItemsAsync(subscription, monitoredItems, ct).ConfigureAwait(false);
-
-                    if (useServerSideSuppressedOrShelvedFilter &&
-                        filterDefinition.CanFallbackToClientSideSuppressedOrShelvedFilter &&
-                        CanRetryWithoutSuppressedOrShelvedServerFilter(exception))
-                    {
-                        useServerSideSuppressedOrShelvedFilter = false;
-                        continue;
-                    }
-                    throw;
-                }
-
-                try
-                {
-                    if (conditionRefreshOnStart)
-                    {
-                        // ConditionRefresh asks the server to replay retained conditions for the
-                        // subscription so a newly added source can synchronize current alarms.
-                        await subscription.Subscription.ConditionRefreshAsync(ct).ConfigureAwait(false);
-                    }
-
-                    // Only update the local registry after both ApplyChangesAsync and the optional
-                    // refresh succeeded, otherwise the handle could claim a source that rolled back.
-                    subscription.AddRegistrations(monitoredItems);
-                    break;
-                }
-                catch
-                {
-                    await RollbackEventMonitoredItemsAsync(subscription, monitoredItems, ct).ConfigureAwait(false);
-                    throw;
-                }
-            }
+                    ct)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -888,6 +928,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            ThrowIfDisposedUnsafe();
             subscription.EnsureActive();
             _ = GetRequiredSession();
 
@@ -956,14 +997,6 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             throw new ArgumentNullException(nameof(subscription));
         }
 
-        if (_disposed && _connection == null)
-        {
-            subscription.TryDeactivate();
-            subscription.DetachHandlers();
-            UnregisterSubscription(subscription);
-            return;
-        }
-
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -982,14 +1015,6 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         if (subscription == null)
         {
             throw new ArgumentNullException(nameof(subscription));
-        }
-
-        if (_disposed && _connection == null)
-        {
-            subscription.TryDeactivate();
-            subscription.DetachHandlers();
-            UnregisterEventSubscription(subscription);
-            return;
         }
 
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
@@ -1074,7 +1099,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
     }
 
-    private static IReadOnlyList<OpcUaMonitoredItemRegistration> CreateMonitoredItemRegistrations(
+    private IReadOnlyList<OpcUaMonitoredItemRegistration> CreateMonitoredItemRegistrations(
         IReadOnlyList<OpcUaSubscriptionItemDefinition> nodes,
         OpcUaSubscriptionState state)
     {
@@ -1112,7 +1137,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         return monitoredItems;
     }
 
-    private static IReadOnlyList<OpcUaEventMonitoredItemRegistration> CreateEventMonitoredItemRegistrations(
+    private IReadOnlyList<OpcUaEventMonitoredItemRegistration> CreateEventMonitoredItemRegistrations(
         IReadOnlyList<OpcUaNode> sourceNodes,
         OpcUaEventFilterDefinition filterDefinition,
         uint queueSize,
@@ -1154,7 +1179,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         return monitoredItems;
     }
 
-    private static void OnMonitoredItemNotification(
+    private void OnMonitoredItemNotification(
         OpcUaSubscriptionState state,
         OpcUaMonitoredItemRegistration registration,
         MonitoredItem monitoredItem,
@@ -1192,13 +1217,18 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         {
             registration.OnChanged(notification);
         }
-        catch
+        catch (Exception exception)
         {
-            // Swallow user callback exceptions so one handler cannot break the subscription pipeline.
+            ReportDiagnostic(
+                OpcUaClientDiagnosticKind.SubscriptionCallbackException,
+                $"A data subscription callback threw while handling node '{registration.NodeId}'.",
+                exception,
+                null,
+                registration.NodeId);
         }
     }
 
-    private static void OnEventMonitoredItemNotification(
+    private void OnEventMonitoredItemNotification(
         OpcUaSubscriptionState state,
         OpcUaEventMonitoredItemRegistration registration,
         Action<OpcUaEventNotification> onEvent,
@@ -1228,9 +1258,14 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             {
                 onEvent(notification);
             }
-            catch
+            catch (Exception exception)
             {
-                // Swallow user callback exceptions so one handler cannot break the subscription pipeline.
+                ReportDiagnostic(
+                    OpcUaClientDiagnosticKind.EventSubscriptionCallbackException,
+                    $"An event subscription callback threw while handling source '{registration.SourceNodeId}'.",
+                    exception,
+                    null,
+                    registration.SourceNodeId);
             }
         }
     }
@@ -2170,30 +2205,93 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
     }
 
+    private static IReadOnlyDictionary<string, object?> BuildReadResults(
+        IReadOnlyList<string> normalizedNodeIds,
+        IList<DataValue> dataValues)
+    {
+        var successfulValues = new Dictionary<string, object?>(normalizedNodeIds.Count, StringComparer.Ordinal);
+        var failures = new List<OpcUaBatchOperationFailure>();
+
+        for (var i = 0; i < normalizedNodeIds.Count; i++)
+        {
+            var dataValue = dataValues[i];
+            var statusCode = dataValue?.StatusCode ?? StatusCodes.BadUnexpectedError;
+
+            if (StatusCode.IsBad(statusCode))
+            {
+                failures.Add(CreateBatchOperationFailure(
+                    normalizedNodeIds[i],
+                    statusCode,
+                    "read"));
+                continue;
+            }
+
+            successfulValues[normalizedNodeIds[i]] = dataValue?.Value;
+        }
+
+        if (failures.Count > 0)
+        {
+            throw new OpcUaBatchReadException(successfulValues, failures);
+        }
+
+        return successfulValues;
+    }
+
+    private static void EnsureWriteResultsSucceeded(
+        IReadOnlyList<KeyValuePair<string, object?>> normalizedNodeValues,
+        IList<StatusCode> results)
+    {
+        var successfulNodeIds = new List<string>(normalizedNodeValues.Count);
+        var failures = new List<OpcUaBatchOperationFailure>();
+
+        for (var i = 0; i < normalizedNodeValues.Count; i++)
+        {
+            var statusCode = results[i];
+            if (StatusCode.IsBad(statusCode))
+            {
+                failures.Add(CreateBatchOperationFailure(
+                    normalizedNodeValues[i].Key,
+                    statusCode,
+                    "write"));
+                continue;
+            }
+
+            successfulNodeIds.Add(normalizedNodeValues[i].Key);
+        }
+
+        if (failures.Count > 0)
+        {
+            throw new OpcUaBatchWriteException(successfulNodeIds, failures);
+        }
+    }
+
+    private static OpcUaBatchOperationFailure CreateBatchOperationFailure(
+        string nodeId,
+        StatusCode statusCode,
+        string operation)
+    {
+        var code = statusCode.Code;
+        var symbolicId = StatusCodes.LookupSymbolicId(code);
+        var message = string.IsNullOrWhiteSpace(symbolicId)
+            ? $"Failed to {operation} node '{nodeId}'."
+            : $"Failed to {operation} node '{nodeId}' ({symbolicId}).";
+
+        return new OpcUaBatchOperationFailure(nodeId, code, symbolicId, message);
+    }
+
     private static bool CanRetryWithoutSuppressedOrShelvedServerFilter(Exception exception)
     {
         if (exception is AggregateException aggregateException)
         {
-            return aggregateException.InnerExceptions.Any(CanRetryWithoutSuppressedOrShelvedServerFilter);
+            return aggregateException.Flatten().InnerExceptions.Any(CanRetryWithoutSuppressedOrShelvedServerFilter);
         }
 
         if (exception is ServiceResultException serviceResultException)
         {
-            var symbolicId = StatusCodes.LookupSymbolicId(Convert.ToUInt32(serviceResultException.StatusCode, CultureInfo.InvariantCulture));
-            if (!string.IsNullOrWhiteSpace(symbolicId) &&
-                (symbolicId.IndexOf("Filter", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                 symbolicId.IndexOf("Event", StringComparison.OrdinalIgnoreCase) >= 0))
-            {
-                return true;
-            }
+            return s_retryableSuppressedOrShelvedFilterStatusCodes.Contains(serviceResultException.StatusCode);
         }
 
-        var message = exception.Message;
-        return !string.IsNullOrWhiteSpace(message) &&
-               (message.IndexOf("filter", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                message.IndexOf("where clause", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                message.IndexOf("suppressed", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                message.IndexOf("shelved", StringComparison.OrdinalIgnoreCase) >= 0);
+        return false;
     }
 
     private static bool ShouldIgnoreSuppressedOrShelvedEvent(
@@ -2325,6 +2423,19 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         {
             connection.Session.Dispose();
         }
+    }
+
+    private async Task DisconnectCoreUnsafeAsync(CancellationToken ct)
+    {
+        if (_connection == null)
+        {
+            return;
+        }
+
+        await UnsubscribeAllUnsafeAsync(ct).ConfigureAwait(false);
+        await UnsubscribeAllEventSubscriptionsUnsafeAsync(ct).ConfigureAwait(false);
+        await CloseConnectionAsync(_connection, ct).ConfigureAwait(false);
+        _connection = null;
     }
 
     private ISession GetRequiredSession()
@@ -2506,6 +2617,41 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
 
         return normalizedInputArguments;
+    }
+
+    private static OpcUaSubscriptionBuildRequest CreateDefaultSubscriptionBuildRequest()
+    {
+        return NormalizeSubscriptionBuildRequest(
+            new OpcUaSubscriptionBuildRequest(
+                name: null,
+                publishingInterval: 1000,
+                keepAliveCount: 10,
+                lifetimeCount: 60,
+                maxNotificationsPerPublish: 0,
+                priority: 0,
+                publishingEnabled: true));
+    }
+
+    private static OpcUaEventSubscriptionBuildRequest CreateDefaultEventSubscriptionBuildRequest(
+        Action<OpcUaEventNotification> onEvent)
+    {
+        return NormalizeEventSubscriptionBuildRequest(
+            new OpcUaEventSubscriptionBuildRequest(
+                name: null,
+                publishingInterval: 1000,
+                keepAliveCount: 10,
+                lifetimeCount: 60,
+                maxNotificationsPerPublish: 0,
+                priority: 0,
+                publishingEnabled: true,
+                eventTypeNode: new OpcUaNode(ObjectTypeIds.AlarmConditionType.ToString()),
+                severityAtLeast: null,
+                queueSize: 1000,
+                discardOldest: true,
+                conditionRefreshOnStart: true,
+                selectClauseMode: OpcUaEventSelectClauseMode.Dynamic,
+                ignoreSuppressedOrShelved: false,
+                onEvent: onEvent));
     }
 
     private static OpcUaSubscriptionBuildRequest NormalizeSubscriptionBuildRequest(
@@ -2711,7 +2857,43 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
     }
 
+    private void ReportDiagnostic(
+        OpcUaClientDiagnosticKind kind,
+        string message,
+        Exception? exception = null,
+        string? subscriptionName = null,
+        string? itemId = null)
+    {
+        var diagnosticsHandler = _options.DiagnosticsHandler;
+        if (diagnosticsHandler == null)
+        {
+            return;
+        }
+
+        try
+        {
+            diagnosticsHandler(new OpcUaClientDiagnosticEvent(
+                kind,
+                message,
+                exception,
+                subscriptionName,
+                itemId));
+        }
+        catch
+        {
+            // Diagnostics are best effort and must never interfere with the client pipeline.
+        }
+    }
+
     private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(GetType().FullName);
+        }
+    }
+
+    private void ThrowIfDisposedUnsafe()
     {
         if (_disposed)
         {

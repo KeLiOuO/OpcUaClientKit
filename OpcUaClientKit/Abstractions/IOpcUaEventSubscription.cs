@@ -3,6 +3,10 @@ namespace OpcUaClientKit;
 /// <summary>
 /// Represents a live alarm/condition event subscription group hosted on an OPC UA session.
 /// </summary>
+/// <remarks>
+/// Event subscription handles are bound to the session that created them. If the owning client disconnects
+/// or reconnects, existing handles become inactive and must be recreated.
+/// </remarks>
 public interface IOpcUaEventSubscription : IAsyncDisposable
 {
     /// <summary>

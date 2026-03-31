@@ -24,6 +24,7 @@ public interface IOpcUaClient : IAsyncDisposable
 
     /// <summary>
     /// Closes the current session and releases all active subscriptions created by this client.
+    /// Any previously obtained subscription handles become inactive and must be recreated after a later reconnect.
     /// </summary>
     /// <param name="ct">Cancellation token used to cancel the disconnect operation.</param>
     Task DisconnectAsync(CancellationToken ct = default);
@@ -60,6 +61,8 @@ public interface IOpcUaClient : IAsyncDisposable
 
     /// <summary>
     /// Reads multiple nodes in a single round trip using raw OPC UA <c>NodeId</c> strings.
+    /// If the server returns a partial failure, the method throws <see cref="OpcUaBatchReadException"/>
+    /// and exposes the successful values through the exception.
     /// </summary>
     /// <param name="nodeIds">Nodes to read.</param>
     /// <param name="ct">Cancellation token used to cancel the read operation.</param>
@@ -69,6 +72,8 @@ public interface IOpcUaClient : IAsyncDisposable
 
     /// <summary>
     /// Reads multiple nodes in a single round trip using <see cref="OpcUaNode"/> instances.
+    /// If the server returns a partial failure, the method throws <see cref="OpcUaBatchReadException"/>
+    /// and exposes the successful values through the exception.
     /// </summary>
     /// <param name="nodes">Nodes to read.</param>
     /// <param name="ct">Cancellation token used to cancel the read operation.</param>
@@ -94,6 +99,8 @@ public interface IOpcUaClient : IAsyncDisposable
 
     /// <summary>
     /// Writes multiple values in a batch using raw OPC UA <c>NodeId</c> strings as keys.
+    /// If the server returns a partial failure, the method throws <see cref="OpcUaBatchWriteException"/>
+    /// and exposes both failed and successful nodes through the exception.
     /// </summary>
     /// <param name="nodeValues">Node/value pairs to write.</param>
     /// <param name="ct">Cancellation token used to cancel the write operation.</param>
@@ -103,6 +110,8 @@ public interface IOpcUaClient : IAsyncDisposable
 
     /// <summary>
     /// Writes multiple values in a batch using raw OPC UA <c>NodeId</c> strings as keys.
+    /// If the server returns a partial failure, the method throws <see cref="OpcUaBatchWriteException"/>
+    /// and exposes both failed and successful nodes through the exception.
     /// </summary>
     /// <param name="nodeValues">Node/value pairs to write.</param>
     /// <param name="ct">Cancellation token used to cancel the write operation.</param>
@@ -112,6 +121,8 @@ public interface IOpcUaClient : IAsyncDisposable
 
     /// <summary>
     /// Writes multiple values in a batch using <see cref="OpcUaNode"/> instances as keys.
+    /// If the server returns a partial failure, the method throws <see cref="OpcUaBatchWriteException"/>
+    /// and exposes both failed and successful nodes through the exception.
     /// </summary>
     /// <param name="nodeValues">Node/value pairs to write.</param>
     /// <param name="ct">Cancellation token used to cancel the write operation.</param>
