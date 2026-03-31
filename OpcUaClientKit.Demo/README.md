@@ -24,6 +24,8 @@
   - 演示创建空数据订阅组、动态添加节点和接收数据变化
 - `event-sub`
   - 演示创建空事件订阅组、添加报警源、刷新 retained alarm 和打印事件字段
+- `reconnect`
+  - 演示启用自动重连、观察断联/重连通知，并验证数据订阅与事件订阅会自动恢复
 
 如果你想在 demo 里体验自动重连，可以参考类库 README 中的 `WithReconnect(...)`
 示例，把同样的配置加到 demo 创建客户端的代码里。当前 demo 不会默认开启自动重连，
@@ -47,6 +49,12 @@ dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.
 
 ```bash
 dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- event-sub
+```
+
+运行自动重连演示：
+
+```bash
+dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- reconnect
 ```
 
 ## Prosys 测试建议

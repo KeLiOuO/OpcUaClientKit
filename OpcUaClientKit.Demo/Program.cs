@@ -8,7 +8,8 @@ var scenarios = new IDemoScenario[]
     new ReadWriteScenario(),
     new MethodCallScenario(),
     new DataSubscriptionScenario(),
-    new EventSubscriptionScenario()
+    new EventSubscriptionScenario(),
+    new ReconnectScenario()
 };
 
 if (args.Length > 0 &&

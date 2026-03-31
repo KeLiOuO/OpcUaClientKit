@@ -15,6 +15,10 @@
   "ignoreSuppressedOrShelved": false,
   "eventSelectClauseMode": "Dynamic",
   "eventFieldPreviewCount": 12,
+  "reconnectMaxAttempts": -1,
+  "reconnectInitialDelayMs": 1000,
+  "reconnectMaxDelayMs": 10000,
+  "reconnectBackoffMultiplier": 2.0,
   "levelNode": {
     "nodeId": "ns=6;s=MyLevel",
     "displayName": "Level"

@@ -37,6 +37,14 @@ internal sealed class DemoSettings
 
     public int EventFieldPreviewCount { get; set; } = 12;
 
+    public int ReconnectMaxAttempts { get; set; } = -1;
+
+    public int ReconnectInitialDelayMs { get; set; } = 1000;
+
+    public int ReconnectMaxDelayMs { get; set; } = 10000;
+
+    public double ReconnectBackoffMultiplier { get; set; } = 2.0d;
+
     public DemoNode LevelNode { get; set; } = new("ns=6;s=MyLevel", "Level");
 
     public DemoNode WritableNode1 { get; set; } = new("ns=3;s=/Plc/DB66.DBW0", "WritableNode1");
@@ -142,6 +150,30 @@ internal sealed class DemoSettings
         if (EventFieldPreviewCount < 1)
         {
             throw new InvalidOperationException($"{nameof(EventFieldPreviewCount)} must be greater than 0.");
+        }
+
+        if (ReconnectMaxAttempts < -1 || ReconnectMaxAttempts == 0)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(ReconnectMaxAttempts)} must be -1 or greater than 0.");
+        }
+
+        if (ReconnectInitialDelayMs <= 0)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(ReconnectInitialDelayMs)} must be greater than 0.");
+        }
+
+        if (ReconnectMaxDelayMs <= 0)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(ReconnectMaxDelayMs)} must be greater than 0.");
+        }
+
+        if (ReconnectBackoffMultiplier < 1d)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(ReconnectBackoffMultiplier)} must be greater than or equal to 1.");
         }
     }
 

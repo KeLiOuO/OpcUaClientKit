@@ -48,4 +48,42 @@ internal static class DemoClientFactory
             })
             .BuildConnectedAsync(ct);
     }
+
+    public static Task<IOpcUaClient> CreateReconnectConnectedClientAsync(
+        IOpcUaClientFactory factory,
+        DemoSettings settings,
+        Action<OpcUaReconnectEvent>? reconnectHandler = null,
+        CancellationToken ct = default)
+    {
+        return factory
+            .CreateBuilder()
+            .WithServerUrl(settings.ServerUrl)
+            .WithApplicationName(settings.ApplicationName)
+            .WithDeviceId($"{settings.AdvancedDeviceId}-reconnect")
+            .WithUserNamePassword(settings.UserName, settings.Password)
+            .WithSecurity(settings.UseSecurity)
+            .WithSessionTimeout(settings.SessionTimeout)
+            .WithOperationTimeout(settings.OperationTimeout)
+            .WithCheckDomain(settings.CheckDomain)
+            .WithAutoAcceptUntrustedServerCertificate(settings.AutoAcceptUntrustedServerCertificate)
+            .WithCertificateOptions(options =>
+            {
+                options.AddAppCertToTrustedStore = false;
+                options.SendCertificateChain = true;
+                options.MinimumKeySize = 2048;
+                options.RejectSHA1SignedCertificates = true;
+                options.RejectUnknownRevocationStatus = true;
+                options.MaxRejectedCertificates = 5;
+            })
+            .WithReconnect(reconnect =>
+            {
+                reconnect.Enabled = true;
+                reconnect.MaxAttempts = settings.ReconnectMaxAttempts;
+                reconnect.InitialDelayMs = settings.ReconnectInitialDelayMs;
+                reconnect.MaxDelayMs = settings.ReconnectMaxDelayMs;
+                reconnect.BackoffMultiplier = settings.ReconnectBackoffMultiplier;
+                reconnect.ReconnectHandler = reconnectHandler;
+            })
+            .BuildConnectedAsync(ct);
+    }
 }
