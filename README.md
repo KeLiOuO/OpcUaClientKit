@@ -6,6 +6,8 @@
 
 This repository includes the core library, a structured console demo, and regression tests against a real OPC UA server.
 
+Note: the code in this repository was generated and iteratively refined with GPT-5.4.
+
 ## What is included
 
 - `OpcUaClientKit`

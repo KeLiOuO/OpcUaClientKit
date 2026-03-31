@@ -2,6 +2,8 @@
 
 `OpcUaClientKit` 是一个轻量、可复用的 OPC UA 客户端类库，基于 `OPCFoundation.NetStandard.Opc.Ua.Client`，目标是把日常项目里最常用的 OPC UA 客户端能力收敛成一套简单、稳定、可扩展的 API。
 
+说明：当前类库代码由 GPT-5.4 生成并持续整理、修正。
+
 它适合这类场景：
 
 - Console 工具
