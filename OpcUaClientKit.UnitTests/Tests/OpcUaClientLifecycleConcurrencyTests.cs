@@ -12,7 +12,7 @@ public sealed class OpcUaClientLifecycleConcurrencyTests
     public async Task DisposeAsync_and_DisconnectAsync_concurrently_cleanup_subscriptions_once()
     {
         var session = CreateConnectedSessionMock();
-        var connection = new OpcUaClientConnection(new ApplicationConfiguration(), session.Object);
+        var connection = new OpcUaClientConnection(new ApplicationConfiguration(), session.Object, (_, _) => { });
         var client = CreateClient(connection);
 
         ReflectionTestHelpers.SetPrivateField(client, "_connection", connection);
@@ -35,7 +35,7 @@ public sealed class OpcUaClientLifecycleConcurrencyTests
     public async Task DisposeAsync_waits_for_inflight_connect_and_prevents_reuse()
     {
         var session = CreateConnectedSessionMock();
-        var connection = new OpcUaClientConnection(new ApplicationConfiguration(), session.Object);
+        var connection = new OpcUaClientConnection(new ApplicationConfiguration(), session.Object, (_, _) => { });
 
         var connectStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var allowConnectToFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

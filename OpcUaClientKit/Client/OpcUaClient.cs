@@ -48,7 +48,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
 
             if (IsConnected)
             {
@@ -278,7 +278,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
 
             var session = GetRequiredSession();
             var subscription = (OpcUaSubscriptionHandle)await BuildSubscriptionUnsafeAsync(session, request, ct)
@@ -335,7 +335,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
 
             var session = GetRequiredSession();
             var subscription = (OpcUaEventSubscriptionHandle)await BuildEventSubscriptionUnsafeAsync(
@@ -382,7 +382,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
             var session = GetRequiredSession();
             return await BuildSubscriptionUnsafeAsync(session, normalizedRequest, ct).ConfigureAwait(false);
         }
@@ -403,7 +403,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
             var session = GetRequiredSession();
             return await BuildEventSubscriptionUnsafeAsync(session, normalizedRequest, ct).ConfigureAwait(false);
         }
@@ -757,7 +757,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
             await AddSubscriptionNodesUnsafeAsync(subscription, normalizedNodes, ct).ConfigureAwait(false);
         }
         finally
@@ -778,7 +778,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
             subscription.EnsureActive();
             _ = GetRequiredSession();
 
@@ -903,7 +903,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
             await AddEventSourcesUnsafeAsync(
                     subscription,
                     normalizedSourceNodes,
@@ -928,7 +928,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         await _syncLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            ThrowIfDisposedUnsafe();
+            ThrowIfDisposed();
             subscription.EnsureActive();
             _ = GetRequiredSession();
 
@@ -2413,6 +2413,12 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
     {
         try
         {
+            if (connection.Configuration.CertificateValidator != null)
+            {
+                connection.Configuration.CertificateValidator.CertificateValidation -=
+                    connection.CertificateValidationHandler;
+            }
+
             await connection.Session.CloseAsync(false, ct).ConfigureAwait(false);
         }
         catch
@@ -2886,14 +2892,6 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
     }
 
     private void ThrowIfDisposed()
-    {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(GetType().FullName);
-        }
-    }
-
-    private void ThrowIfDisposedUnsafe()
     {
         if (_disposed)
         {

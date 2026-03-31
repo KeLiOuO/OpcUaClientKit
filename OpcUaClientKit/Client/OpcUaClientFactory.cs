@@ -264,7 +264,7 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
                 effectiveApplicationName,
                 ct)
             .ConfigureAwait(false);
-        await EnsureApplicationCertificateAsync(
+        var certificateValidationHandler = await EnsureApplicationCertificateAsync(
                 configuration,
                 effectiveApplicationName,
                 options,
@@ -282,7 +282,7 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
                 ct)
             .ConfigureAwait(false);
 
-        return new OpcUaClientConnection(configuration, session);
+        return new OpcUaClientConnection(configuration, session, certificateValidationHandler);
     }
 
     private static OpcUaClientOptions NormalizeOptions(OpcUaClientOptions options)
@@ -415,7 +415,7 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         return applicationConfiguration;
     }
 
-    private static async Task EnsureApplicationCertificateAsync(
+    private static async Task<CertificateValidationEventHandler> EnsureApplicationCertificateAsync(
         ApplicationConfiguration configuration,
         string effectiveApplicationName,
         OpcUaClientOptions options,
@@ -439,7 +439,16 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         }
 
         await configuration.CertificateValidator.UpdateAsync(configuration, ct).ConfigureAwait(false);
-        configuration.CertificateValidator.CertificateValidation += (_, e) =>
+
+        var certificateValidationHandler = CreateCertificateValidationHandler(options);
+        configuration.CertificateValidator.CertificateValidation += certificateValidationHandler;
+        return certificateValidationHandler;
+    }
+
+    private static CertificateValidationEventHandler CreateCertificateValidationHandler(
+        OpcUaClientOptions options)
+    {
+        return (_, e) =>
         {
             if (e.Error.StatusCode == StatusCodes.BadCertificateUntrusted &&
                 options.Certificate.AutoAcceptUntrustedServerCertificate)
@@ -559,7 +568,8 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
 
 internal sealed record OpcUaClientConnection(
     ApplicationConfiguration Configuration,
-    ISession Session);
+    ISession Session,
+    CertificateValidationEventHandler CertificateValidationHandler);
 
 
 
