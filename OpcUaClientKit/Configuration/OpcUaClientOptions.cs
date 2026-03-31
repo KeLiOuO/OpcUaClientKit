@@ -76,6 +76,12 @@ public sealed class OpcUaClientOptions
     public OpcUaCertificateOptions Certificate { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets optional automatic reconnect behavior.
+    /// Reconnect is disabled by default.
+    /// </summary>
+    public OpcUaReconnectOptions Reconnect { get; set; } = new();
+
+    /// <summary>
     /// Creates a deep copy of the current options object.
     /// </summary>
     public OpcUaClientOptions Clone()
@@ -93,7 +99,8 @@ public sealed class OpcUaClientOptions
             UserName = UserName,
             Password = Password,
             DiagnosticsHandler = DiagnosticsHandler,
-            Certificate = Certificate.Clone()
+            Certificate = Certificate.Clone(),
+            Reconnect = Reconnect.Clone()
         };
     }
 }

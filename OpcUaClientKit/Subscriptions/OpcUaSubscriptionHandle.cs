@@ -10,10 +10,12 @@ internal sealed class OpcUaSubscriptionHandle : IOpcUaSubscription
     private readonly Func<OpcUaSubscriptionHandle, CancellationToken, Task> _unsubscribeAsync;
     private readonly OpcUaSubscriptionState _state;
     private readonly Dictionary<string, OpcUaMonitoredItemRegistration> _registrations;
+    private Subscription _subscription;
 
     public OpcUaSubscriptionHandle(
         string name,
         Subscription subscription,
+        OpcUaSubscriptionBuildRequest buildRequest,
         IReadOnlyList<OpcUaMonitoredItemRegistration> monitoredItems,
         OpcUaSubscriptionState state,
         Func<OpcUaSubscriptionHandle, IReadOnlyList<OpcUaSubscriptionItemDefinition>, CancellationToken, Task> addNodesAsync,
@@ -21,7 +23,8 @@ internal sealed class OpcUaSubscriptionHandle : IOpcUaSubscription
         Func<OpcUaSubscriptionHandle, CancellationToken, Task> unsubscribeAsync)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
-        Subscription = subscription ?? throw new ArgumentNullException(nameof(subscription));
+        _subscription = subscription ?? throw new ArgumentNullException(nameof(subscription));
+        BuildRequest = buildRequest ?? throw new ArgumentNullException(nameof(buildRequest));
         if (monitoredItems == null)
         {
             throw new ArgumentNullException(nameof(monitoredItems));
@@ -40,7 +43,9 @@ internal sealed class OpcUaSubscriptionHandle : IOpcUaSubscription
 
     public IReadOnlyList<string> NodeIds => GetNodeIdsSnapshot();
 
-    internal Subscription Subscription { get; }
+    internal Subscription Subscription => _subscription;
+
+    internal OpcUaSubscriptionBuildRequest BuildRequest { get; }
 
     internal OpcUaSubscriptionState State => _state;
 
@@ -169,6 +174,19 @@ internal sealed class OpcUaSubscriptionHandle : IOpcUaSubscription
         }
     }
 
+    internal IReadOnlyList<OpcUaSubscriptionItemDefinition> GetItemDefinitions()
+    {
+        lock (_registrationsLock)
+        {
+            return _registrations.Values
+                .Select(static registration => new OpcUaSubscriptionItemDefinition(
+                    new OpcUaNode(registration.NodeId, registration.DisplayName),
+                    registration.OnChanged,
+                    registration.Options.Clone()))
+                .ToList();
+        }
+    }
+
     internal IReadOnlyList<OpcUaMonitoredItemRegistration> GetRegistrationsOrThrow(
         IReadOnlyList<string> nodeIds)
     {
@@ -209,6 +227,31 @@ internal sealed class OpcUaSubscriptionHandle : IOpcUaSubscription
             foreach (var nodeId in nodeIds)
             {
                 _registrations.Remove(nodeId);
+            }
+        }
+    }
+
+    internal void ReplaceAfterReconnect(
+        Subscription subscription,
+        IReadOnlyList<OpcUaMonitoredItemRegistration> registrations)
+    {
+        if (subscription == null)
+        {
+            throw new ArgumentNullException(nameof(subscription));
+        }
+
+        if (registrations == null)
+        {
+            throw new ArgumentNullException(nameof(registrations));
+        }
+
+        lock (_registrationsLock)
+        {
+            _subscription = subscription;
+            _registrations.Clear();
+            foreach (var registration in registrations)
+            {
+                _registrations[registration.NodeId] = registration;
             }
         }
     }

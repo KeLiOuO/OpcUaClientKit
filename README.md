@@ -28,6 +28,7 @@ This repository includes the core library, a structured console demo, and regres
 - Method invocation
 - Data subscriptions
 - Alarm event subscriptions
+- Optional automatic reconnect with subscription restoration
 
 ## Project structure
 
@@ -80,6 +81,18 @@ dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests
 - Library guide: [OpcUaClientKit/README.md](./OpcUaClientKit/README.md)
 - Demo guide: [OpcUaClientKit.Demo/README.md](./OpcUaClientKit.Demo/README.md)
 - Regression test notes: [OpcUaClientKit.RegressionTests/README.md](./OpcUaClientKit.RegressionTests/README.md)
+
+## Reconnect behavior
+
+`OpcUaClientKit` now supports optional automatic reconnect. It is disabled by default and only starts
+when explicitly configured through `OpcUaClientOptions.Reconnect` or `WithReconnect(...)`.
+
+- Transparent recovery is limited to data subscriptions and alarm event subscriptions
+- Normal read/write/method calls are not retried automatically during the reconnect window
+- `Disconnected`, `Reconnecting`, `AttemptFailed`, `Reconnected`, and `GaveUp` lifecycle notifications
+  are exposed through `ReconnectHandler`
+- A reconnect attempt is considered successful only when the new session is created and all tracked
+  subscriptions are fully restored
 
 ## Recommended local test environment
 

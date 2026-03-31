@@ -11,24 +11,24 @@ internal sealed class OpcUaEventSubscriptionHandle : IOpcUaEventSubscription
     private readonly Func<OpcUaEventSubscriptionHandle, CancellationToken, Task> _unsubscribeAsync;
     private readonly OpcUaSubscriptionState _state;
     private readonly Dictionary<string, OpcUaEventMonitoredItemRegistration> _registrations;
+    private Subscription _subscription;
+    private OpcUaEventFilterDefinition _filterDefinition;
 
     public OpcUaEventSubscriptionHandle(
         string name,
         Subscription subscription,
+        OpcUaEventSubscriptionBuildRequest buildRequest,
         IReadOnlyList<OpcUaEventMonitoredItemRegistration> monitoredItems,
         OpcUaSubscriptionState state,
         OpcUaEventFilterDefinition filterDefinition,
-        uint queueSize,
-        bool discardOldest,
-        bool conditionRefreshOnStart,
-        Action<OpcUaEventNotification> onEvent,
         Func<OpcUaEventSubscriptionHandle, IReadOnlyList<OpcUaNode>, CancellationToken, Task> addSourcesAsync,
         Func<OpcUaEventSubscriptionHandle, IReadOnlyList<string>, CancellationToken, Task> removeSourcesAsync,
         Func<OpcUaEventSubscriptionHandle, CancellationToken, Task> refreshAsync,
         Func<OpcUaEventSubscriptionHandle, CancellationToken, Task> unsubscribeAsync)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
-        Subscription = subscription ?? throw new ArgumentNullException(nameof(subscription));
+        _subscription = subscription ?? throw new ArgumentNullException(nameof(subscription));
+        BuildRequest = buildRequest ?? throw new ArgumentNullException(nameof(buildRequest));
         if (monitoredItems == null)
         {
             throw new ArgumentNullException(nameof(monitoredItems));
@@ -36,11 +36,7 @@ internal sealed class OpcUaEventSubscriptionHandle : IOpcUaEventSubscription
 
         _registrations = monitoredItems.ToDictionary(static item => item.SourceNodeId, StringComparer.Ordinal);
         _state = state ?? throw new ArgumentNullException(nameof(state));
-        FilterDefinition = filterDefinition ?? throw new ArgumentNullException(nameof(filterDefinition));
-        QueueSize = queueSize;
-        DiscardOldest = discardOldest;
-        ConditionRefreshOnStart = conditionRefreshOnStart;
-        OnEvent = onEvent ?? throw new ArgumentNullException(nameof(onEvent));
+        _filterDefinition = filterDefinition ?? throw new ArgumentNullException(nameof(filterDefinition));
         _addSourcesAsync = addSourcesAsync ?? throw new ArgumentNullException(nameof(addSourcesAsync));
         _removeSourcesAsync = removeSourcesAsync ?? throw new ArgumentNullException(nameof(removeSourcesAsync));
         _refreshAsync = refreshAsync ?? throw new ArgumentNullException(nameof(refreshAsync));
@@ -53,19 +49,21 @@ internal sealed class OpcUaEventSubscriptionHandle : IOpcUaEventSubscription
 
     public IReadOnlyList<string> SourceNodeIds => GetSourceNodeIdsSnapshot();
 
-    internal Subscription Subscription { get; }
+    internal Subscription Subscription => _subscription;
+
+    internal OpcUaEventSubscriptionBuildRequest BuildRequest { get; }
 
     internal OpcUaSubscriptionState State => _state;
 
-    internal OpcUaEventFilterDefinition FilterDefinition { get; }
+    internal OpcUaEventFilterDefinition FilterDefinition => _filterDefinition;
 
-    internal uint QueueSize { get; }
+    internal uint QueueSize => BuildRequest.QueueSize;
 
-    internal bool DiscardOldest { get; }
+    internal bool DiscardOldest => BuildRequest.DiscardOldest;
 
-    internal bool ConditionRefreshOnStart { get; }
+    internal bool ConditionRefreshOnStart => BuildRequest.ConditionRefreshOnStart;
 
-    internal Action<OpcUaEventNotification> OnEvent { get; }
+    internal Action<OpcUaEventNotification> OnEvent => BuildRequest.OnEvent;
 
     public Task AddSourceAsync(string sourceNodeId, CancellationToken ct = default)
     {
@@ -210,11 +208,55 @@ internal sealed class OpcUaEventSubscriptionHandle : IOpcUaEventSubscription
         }
     }
 
+    internal IReadOnlyList<OpcUaNode> GetSourceNodes()
+    {
+        lock (_registrationsLock)
+        {
+            return _registrations.Values
+                .Select(static registration => new OpcUaNode(
+                    registration.SourceNodeId,
+                    registration.SourceDisplayName))
+                .ToList();
+        }
+    }
+
     internal static void DetachHandlers(IReadOnlyList<OpcUaEventMonitoredItemRegistration> registrations)
     {
         foreach (var registration in registrations)
         {
             registration.MonitoredItem.Notification -= registration.Handler;
+        }
+    }
+
+    internal void ReplaceAfterReconnect(
+        Subscription subscription,
+        OpcUaEventFilterDefinition filterDefinition,
+        IReadOnlyList<OpcUaEventMonitoredItemRegistration> registrations)
+    {
+        if (subscription == null)
+        {
+            throw new ArgumentNullException(nameof(subscription));
+        }
+
+        if (filterDefinition == null)
+        {
+            throw new ArgumentNullException(nameof(filterDefinition));
+        }
+
+        if (registrations == null)
+        {
+            throw new ArgumentNullException(nameof(registrations));
+        }
+
+        lock (_registrationsLock)
+        {
+            _subscription = subscription;
+            _filterDefinition = filterDefinition;
+            _registrations.Clear();
+            foreach (var registration in registrations)
+            {
+                _registrations[registration.SourceNodeId] = registration;
+            }
         }
     }
 

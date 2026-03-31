@@ -19,6 +19,7 @@
 - OPC UA 方法调用
 - 数据订阅
 - 报警事件订阅
+- 可选的自动重连与订阅恢复
 - 客户端级诊断钩子，用于观察订阅回调异常和事件过滤降级告警
 - 同时支持原始 `nodeId` 和封装后的 `OpcUaNode`
 
@@ -125,6 +126,19 @@ var client = await factory
     {
         Console.WriteLine($"{diagnostic.Kind}: {diagnostic.Message}");
     })
+    .WithReconnect(reconnect =>
+    {
+        reconnect.Enabled = true;
+        reconnect.MaxAttempts = -1;
+        reconnect.InitialDelayMs = 1000;
+        reconnect.MaxDelayMs = 10000;
+        reconnect.BackoffMultiplier = 2.0d;
+        reconnect.ReconnectHandler = evt =>
+        {
+            Console.WriteLine(
+                $"Reconnect {evt.Kind}, Attempt={evt.AttemptNumber}, Next={evt.NextRetryDelay}");
+        };
+    })
     .BuildConnectedAsync();
 ```
 
@@ -153,7 +167,73 @@ await using var client = await factory.CreateConnectedAsync(options);
 注意：
 
 - `Password` 当前仍以普通 `string` 形式保留在托管内存中，这是当前 API 设计下的既定行为
-- `DisconnectAsync()` 或重新 `ConnectAsync()` 后，之前拿到的订阅句柄会失效，需要重新创建
+- 用户主动 `DisconnectAsync()` 或 `DisposeAsync()` 后，之前拿到的订阅句柄会失效，需要重新创建
+- 若启用了自动重连，非预期断联后的数据订阅和事件订阅句柄会自动恢复，不需要上层重建
+
+## 自动重连（可选）
+
+自动重连默认关闭。只有显式配置 `OpcUaClientOptions.Reconnect` 或使用
+`WithReconnect(...)` 后，客户端才会在 `KeepAlive` 检测到意外断联时启动重连流程。
+
+```csharp
+await using var client = await factory
+    .CreateBuilder()
+    .WithServerUrl("opc.tcp://127.0.0.1:4840")
+    .WithApplicationName("MyOpcUaApp")
+    .WithUserNamePassword("OpcUaClient", "123456")
+    .WithAutoAcceptUntrustedServerCertificate(true)
+    .WithReconnect(reconnect =>
+    {
+        reconnect.Enabled = true;
+        reconnect.MaxAttempts = 10;
+        reconnect.InitialDelayMs = 1000;
+        reconnect.MaxDelayMs = 15000;
+        reconnect.BackoffMultiplier = 2.0d;
+        reconnect.ReconnectHandler = evt =>
+        {
+            Console.WriteLine(
+                $"[{evt.Kind}] Attempt={evt.AttemptNumber}, Next={evt.NextRetryDelay}");
+
+            if (evt.Exception != null)
+            {
+                Console.WriteLine(evt.Exception.Message);
+            }
+        };
+    })
+    .BuildConnectedAsync();
+```
+
+重连通知语义：
+
+- `Disconnected`
+  - 非预期断联且即将启动自动重连时，只发一次
+- `Reconnecting`
+  - 每次新的重连尝试开始时发
+- `AttemptFailed`
+  - 单次尝试失败时发
+- `Reconnected`
+  - 只有“新连接建立成功，并且所有数据订阅、事件订阅都恢复成功”时才发
+- `GaveUp`
+  - 超过最大重试次数后发
+
+自动重连的恢复范围：
+
+- 会自动恢复：
+  - 数据订阅
+  - 事件订阅
+- 不保证自动等待恢复：
+  - `ReadNodeAsync`
+  - `WriteNodeAsync`
+  - `CallMethodAsync`
+
+也就是说，在重连窗口内，普通读、写、方法调用仍可能抛出“未连接”或底层通信异常，调用方应按业务需要自行重试。
+
+补充说明：
+
+- 重连成功采用“全部恢复才算成功”的严格语义
+- 只要有任一数据订阅或事件订阅恢复失败，本次尝试就会继续下一轮退避重试
+- 用户主动调用 `DisconnectAsync()` 或 `DisposeAsync()` 不会触发自动重连生命周期事件
+- 达到 `GaveUp` 后，现有订阅句柄会保留；如果之后再次手动调用 `ConnectAsync()`，客户端会继续尝试恢复这些句柄
 
 ## 节点封装
 
@@ -403,7 +483,6 @@ dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests
 
 当前版本已经覆盖常见的连接、读写、方法、数据订阅和报警事件订阅，但仍未包含这些增强项：
 
-- 自动重连和订阅恢复
 - 报警 Ack / Confirm / Shelve / Unshelve
 - Browse / 节点元数据浏览
 - 历史数据 / 历史事件读取

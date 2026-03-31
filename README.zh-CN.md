@@ -28,6 +28,7 @@
 - 方法调用
 - 数据订阅
 - 报警事件订阅
+- 可选的自动重连与订阅恢复
 
 ## 项目结构
 
@@ -80,6 +81,17 @@ dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests
 - 类库使用说明：[OpcUaClientKit/README.md](./OpcUaClientKit/README.md)
 - Demo 说明：[OpcUaClientKit.Demo/README.md](./OpcUaClientKit.Demo/README.md)
 - 回归测试说明：[OpcUaClientKit.RegressionTests/README.md](./OpcUaClientKit.RegressionTests/README.md)
+
+## 自动重连说明
+
+`OpcUaClientKit` 现在支持可选的自动重连能力。该功能默认关闭，只有在
+`OpcUaClientOptions.Reconnect` 或 `WithReconnect(...)` 中显式启用后才会生效。
+
+- 透明恢复范围只包含数据订阅和报警事件订阅
+- 普通读写和方法调用在重连窗口内不会自动重试
+- `ReconnectHandler` 会提供 `Disconnected`、`Reconnecting`、`AttemptFailed`、`Reconnected`、
+  `GaveUp` 这些生命周期通知
+- 只有“新会话建立成功且全部订阅恢复完成”时，本次重连才算成功
 
 ## 推荐本地测试环境
 

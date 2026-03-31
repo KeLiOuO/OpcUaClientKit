@@ -18,5 +18,15 @@ public enum OpcUaClientDiagnosticKind
     /// <summary>
     /// The client had to fall back from a server-side event filter to client-side filtering.
     /// </summary>
-    EventFilterFallbackWarning
+    EventFilterFallbackWarning,
+
+    /// <summary>
+    /// A data subscription could not be restored after a reconnect.
+    /// </summary>
+    SubscriptionRestoreFailed,
+
+    /// <summary>
+    /// An event subscription could not be restored after a reconnect.
+    /// </summary>
+    EventSubscriptionRestoreFailed
 }

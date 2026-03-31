@@ -107,6 +107,20 @@ public sealed class OpcUaClientBuilder
     }
 
     /// <summary>
+    /// Configures automatic reconnect behavior for unexpected disconnects.
+    /// </summary>
+    public OpcUaClientBuilder WithReconnect(Action<OpcUaReconnectOptions> configure)
+    {
+        if (configure == null)
+        {
+            throw new ArgumentNullException(nameof(configure));
+        }
+
+        configure(_options.Reconnect);
+        return this;
+    }
+
+    /// <summary>
     /// Overrides the default PKI root directory used by the SDK.
     /// </summary>
     public OpcUaClientBuilder WithPkiRootPath(string pkiRootPath)
