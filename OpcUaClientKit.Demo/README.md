@@ -10,7 +10,7 @@
 - 默认启用安全连接
 - 默认接受不信任的服务端证书，方便本地联调
 
-配置文件位于 [DemoSettings.json](C:\Code\ConsoleApp\OpcUaClientKit.Demo\DemoSettings.json)。
+配置文件位于 [DemoSettings.json](./DemoSettings.json)。
 
 ## 场景列表
 
@@ -36,25 +36,25 @@
 列出可用场景：
 
 ```bash
-dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
+dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
 ```
 
 运行快速开始：
 
 ```bash
-dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- quickstart
+dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- quickstart
 ```
 
 运行事件订阅：
 
 ```bash
-dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- event-sub
+dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- event-sub
 ```
 
 运行自动重连演示：
 
 ```bash
-dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- reconnect
+dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- reconnect
 ```
 
 ## Prosys 测试建议

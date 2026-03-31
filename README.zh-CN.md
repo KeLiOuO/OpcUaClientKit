@@ -55,25 +55,25 @@
 构建整个解决方案：
 
 ```bash
-dotnet build C:\Code\ConsoleApp\OpcUaClientKit.slnx
+dotnet build .\OpcUaClientKit.slnx
 ```
 
 运行控制台 demo：
 
 ```bash
-dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
+dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
 ```
 
 运行回归测试：
 
 ```bash
-dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+dotnet test .\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
 ```
 
 运行单元测试：
 
 ```bash
-dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
+dotnet test .\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 ```
 
 ## 文档入口

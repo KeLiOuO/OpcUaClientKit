@@ -20,7 +20,7 @@
 
 ## 节点配置
 
-测试使用的节点定义在 [RegressionTestSettings.json](C:/Code/ConsoleApp/OpcUaClientKit.RegressionTests/RegressionTestSettings.json)。
+测试使用的节点定义在 [RegressionTestSettings.json](./RegressionTestSettings.json)。
 
 如果你的 Prosys 模拟器节点名和 demo 不完全一致，直接改这个文件即可。常见需要对齐的节点包括：
 
@@ -34,7 +34,7 @@
 ## 运行方式
 
 ```powershell
-dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+dotnet test .\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
 ```
 
 建议在运行前先确认：

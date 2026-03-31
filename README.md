@@ -55,25 +55,25 @@ This repository includes the core library, a structured console demo, and regres
 Build the full solution:
 
 ```bash
-dotnet build C:\Code\ConsoleApp\OpcUaClientKit.slnx
+dotnet build .\OpcUaClientKit.slnx
 ```
 
 Run the console demo:
 
 ```bash
-dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
+dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
 ```
 
 Run regression tests:
 
 ```bash
-dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+dotnet test .\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
 ```
 
 Run focused unit tests:
 
 ```bash
-dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
+dotnet test .\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 ```
 
 ## Documentation

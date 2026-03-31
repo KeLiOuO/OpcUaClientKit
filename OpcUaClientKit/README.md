@@ -447,12 +447,12 @@ await subscription.AddSourceAsync(new OpcUaNode("ns=6;s=MyObjectsFolder", "MyObj
 运行示例：
 
 ```bash
-dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- quickstart
+dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- quickstart
 ```
 
 Demo 配置文件：
 
-- `C:\Code\ConsoleApp\OpcUaClientKit.Demo\DemoSettings.json`
+- [`../OpcUaClientKit.Demo/DemoSettings.json`](../OpcUaClientKit.Demo/DemoSettings.json)
 
 ## 回归测试
 
@@ -472,11 +472,11 @@ Demo 配置文件：
 运行方式：
 
 ```bash
-dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+dotnet test .\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
 ```
 
 ```bash
-dotnet test C:\Code\ConsoleApp\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
+dotnet test .\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 ```
 
 ## 当前边界

@@ -99,5 +99,5 @@ static void PrintScenarioList(IEnumerable<IDemoScenario> scenarios)
     Console.WriteLine(
         "You can also run a scenario directly, for example:");
     Console.WriteLine(
-        "dotnet run --project C:\\Code\\ConsoleApp\\OpcUaClientKit.Demo\\OpcUaClientKit.Demo.csproj -- quickstart");
+        "dotnet run --project .\\OpcUaClientKit.Demo\\OpcUaClientKit.Demo.csproj -- quickstart");
 }
