@@ -50,6 +50,31 @@ dotnet add package OpcUaClientKit
 - `ISubscribableOpcUaClient`
 - `IEventSubscribableOpcUaClient`
 
+## 项目结构
+
+当前类库按职责做了分层整理：
+
+- `Abstractions`
+  - 公共接口定义，例如客户端、数据订阅、事件订阅相关接口
+- `Client`
+  - 客户端核心实现、工厂、Builder 和路径辅助逻辑
+- `Configuration`
+  - 客户端配置模型
+- `DependencyInjection`
+  - ASP.NET Core / Worker Service 的 DI 扩展
+- `Events`
+  - 报警事件订阅相关类型、Builder、通知 DTO 和内部过滤定义
+- `Extensions`
+  - `AsSubscribable()`、`AsEventSubscribable()` 这类扩展入口
+- `Models`
+  - 通用节点模型，例如 `OpcUaNode`
+- `Subscriptions`
+  - 数据订阅相关类型、Builder、通知 DTO 和运行句柄
+- `Samples`
+  - 参考配置文件和示例资源
+
+根目录只保留项目文件、README 和少量必须的入口文件，避免源码继续扁平堆在一起。
+
 ## 快速开始
 
 ### 1. 最简单的连接方式

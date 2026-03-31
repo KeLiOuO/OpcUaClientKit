@@ -2,5 +2,6 @@
   <Project Path="MyDemo/MyDemo.csproj" Id="dae9a3cb-0bd3-4c06-a20f-6b4499fd4a60" />
   <Project Path="OpcUaClientKit.EventDemo/OpcUaClientKit.EventDemo.csproj" />
   <Project Path="OpcUaClientKit.Demo/OpcUaClientKit.Demo.csproj" />
+  <Project Path="OpcUaClientKit.RegressionTests/OpcUaClientKit.RegressionTests.csproj" />
   <Project Path="OpcUaClientKit/OpcUaClientKit.csproj" />
 </Solution>
