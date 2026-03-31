@@ -1,108 +1,102 @@
 using OpcUaClientKit;
+using OpcUaClientKit.Demo;
 
-const string serverUrl = "opc.tcp://127.0.0.1:4840";
-const string applicationName = "OpcUaClientKitDemo";
-const string userName = "OpcUaClient";
-const string password = "123456";
-var levelNode = new OpcUaNode("ns=6;s=MyLevel", "Level");
+var settings = DemoSettings.Load();
+var scenarios = new IDemoScenario[]
+{
+    new QuickStartScenario(),
+    new ReadWriteScenario(),
+    new MethodCallScenario(),
+    new DataSubscriptionScenario(),
+    new EventSubscriptionScenario()
+};
 
-IOpcUaClientFactory factory = new OpcUaClientFactory();
-List<DemoClientRegistration> clients = new List<DemoClientRegistration>();
+if (args.Length > 0 &&
+    string.Equals(args[0].Trim(), "list", StringComparison.OrdinalIgnoreCase))
+{
+    PrintScenarioList(scenarios);
+    return;
+}
+
+var selectedScenario = ResolveScenario(args, scenarios);
+if (selectedScenario == null)
+{
+    selectedScenario = PromptForScenarioSelection(scenarios);
+}
+
+if (selectedScenario == null)
+{
+    Console.WriteLine("No scenario selected. Exiting.");
+    return;
+}
+
+var context = new DemoContext(settings, new OpcUaClientFactory());
+
+Console.WriteLine("OpcUaClientKit Console Demo");
+Console.WriteLine($"Settings file: {Path.Combine(AppContext.BaseDirectory, "DemoSettings.json")}");
+Console.WriteLine();
 
 try
 {
-    var simpleClient = await factory.CreateConnectedAsync(
-        serverUrl,
-        applicationName,
-        "device-a",
-        userName,
-        password,
-        autoAcceptUntrustedServerCertificate: true,
-        useSecurity: true,
-        sessionTimeout: 60000);
-    clients.Add(new DemoClientRegistration("Simple", "device-a", simpleClient));
-    PrintConnected("Simple", serverUrl, applicationName, "device-a");
-
-    var complexClient = await factory
-        .CreateBuilder()
-        .WithServerUrl(serverUrl)
-        .WithApplicationName(applicationName)
-        .WithDeviceId("device-b")
-        .WithUserNamePassword(userName, password)
-        .WithSecurity(true)
-        .WithCheckDomain(false)
-        .WithSessionTimeout(60000)
-        .WithOperationTimeout(30000)
-        .WithAutoAcceptUntrustedServerCertificate(true)
-        .WithCertificateOptions(options =>
-        {
-            options.OrganizationName = string.Empty;
-            options.AddAppCertToTrustedStore = false;
-            options.SendCertificateChain = true;
-            options.MinimumKeySize = 2048;
-            options.RejectSHA1SignedCertificates = true;
-            options.RejectUnknownRevocationStatus = true;
-            options.MaxRejectedCertificates = 5;
-        })
-        .BuildConnectedAsync();
-    clients.Add(new DemoClientRegistration("Complex", "device-b", complexClient));
-    PrintConnected("Complex", serverUrl, applicationName, "device-b");
-
-    Console.WriteLine($"Connected {clients.Count} OPC UA client(s). Press Enter to disconnect.");
-    double value = Convert.ToDouble(await clients[0].Client.ReadNodeAsync(levelNode));
-    Console.WriteLine($"device1 read {levelNode.DisplayName} ({levelNode.NodeId}) value is {value}");
-    Console.ReadLine();
+    await selectedScenario.RunAsync(context, CancellationToken.None);
 }
-finally
+catch (Exception ex)
 {
-    foreach (var registration in clients)
-    {
-        await registration.Client.DisposeAsync();
-    }
+    Console.WriteLine("The demo failed:");
+    Console.WriteLine(ex.Message);
+    Console.WriteLine(ex);
 }
 
-static void PrintConnected(
-    string mode,
-    string serverUrl,
-    string applicationName,
-    string deviceId)
+static IDemoScenario? ResolveScenario(string[] args, IEnumerable<IDemoScenario> scenarios)
 {
-    var effectiveApplicationName = string.IsNullOrWhiteSpace(deviceId)
-        ? applicationName
-        : $"{applicationName}-{deviceId}";
-    var pkiRootPath = BuildDefaultPkiRootPath(applicationName, deviceId);
-
-    Console.WriteLine($"[{mode}] {effectiveApplicationName} connected to {serverUrl}");
-    Console.WriteLine($"[{mode}] Certificate directory: {pkiRootPath}");
-}
-
-static string BuildDefaultPkiRootPath(string applicationName, string? deviceId)
-{
-    var segments = new List<string>
+    if (args.Length == 0)
     {
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "OPC Foundation",
-        SanitizePathSegment(applicationName)
-    };
-
-    if (!string.IsNullOrWhiteSpace(deviceId))
-    {
-        segments.Add(SanitizePathSegment(deviceId));
+        return null;
     }
 
-    segments.Add("pki");
-    return Path.Combine(segments.ToArray());
+    var input = args[0].Trim();
+    return scenarios.FirstOrDefault(scenario =>
+        string.Equals(scenario.Key, input, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(scenario.Title, input, StringComparison.OrdinalIgnoreCase));
 }
 
-static string SanitizePathSegment(string value)
+static IDemoScenario? PromptForScenarioSelection(IReadOnlyList<IDemoScenario> scenarios)
 {
-    var invalidCharacters = Path.GetInvalidFileNameChars();
-    var sanitized = new string(value.Select(ch => invalidCharacters.Contains(ch) ? '_' : ch).ToArray());
-    return string.IsNullOrWhiteSpace(sanitized) ? "OpcUaClient" : sanitized;
+    PrintScenarioList(scenarios);
+    Console.WriteLine();
+    Console.Write("Select a scenario by number or key: ");
+    var input = Console.ReadLine()?.Trim();
+    if (string.IsNullOrWhiteSpace(input))
+    {
+        return null;
+    }
+
+    if (int.TryParse(input, out var index) &&
+        index >= 1 &&
+        index <= scenarios.Count)
+    {
+        return scenarios[index - 1];
+    }
+
+    return scenarios.FirstOrDefault(scenario =>
+        string.Equals(scenario.Key, input, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(scenario.Title, input, StringComparison.OrdinalIgnoreCase));
 }
 
-internal sealed record DemoClientRegistration(
-    string Mode,
-    string DeviceId,
-    IOpcUaClient Client);
+static void PrintScenarioList(IEnumerable<IDemoScenario> scenarios)
+{
+    Console.WriteLine("Available scenarios:");
+    var index = 1;
+    foreach (var scenario in scenarios)
+    {
+        Console.WriteLine($"{index}. {scenario.Key} - {scenario.Title}");
+        Console.WriteLine($"   {scenario.Description}");
+        index++;
+    }
 
+    Console.WriteLine();
+    Console.WriteLine(
+        "You can also run a scenario directly, for example:");
+    Console.WriteLine(
+        "dotnet run --project C:\\Code\\ConsoleApp\\OpcUaClientKit.Demo\\OpcUaClientKit.Demo.csproj -- quickstart");
+}

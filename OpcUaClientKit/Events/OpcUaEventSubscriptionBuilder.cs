@@ -2,6 +2,9 @@ using Opc.Ua;
 
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Builds an alarm and condition event subscription group.
+/// </summary>
 public sealed class OpcUaEventSubscriptionBuilder
 {
     private readonly OpcUaClient _client;
@@ -25,96 +28,145 @@ public sealed class OpcUaEventSubscriptionBuilder
         _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
+    /// <summary>
+    /// Sets a friendly name for the event subscription.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithName(string name)
     {
         _name = name;
         return this;
     }
 
+    /// <summary>
+    /// Sets the publishing interval in milliseconds.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithPublishingInterval(int milliseconds)
     {
         _publishingInterval = milliseconds;
         return this;
     }
 
+    /// <summary>
+    /// Sets the keep-alive count used by the server.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithKeepAliveCount(uint keepAliveCount)
     {
         _keepAliveCount = keepAliveCount;
         return this;
     }
 
+    /// <summary>
+    /// Sets the lifetime count used by the server.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithLifetimeCount(uint lifetimeCount)
     {
         _lifetimeCount = lifetimeCount;
         return this;
     }
 
+    /// <summary>
+    /// Sets the maximum number of event notifications returned per publish response.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithMaxNotificationsPerPublish(uint maxNotificationsPerPublish)
     {
         _maxNotificationsPerPublish = maxNotificationsPerPublish;
         return this;
     }
 
+    /// <summary>
+    /// Sets the event subscription priority.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithPriority(byte priority)
     {
         _priority = priority;
         return this;
     }
 
+    /// <summary>
+    /// Enables or disables publishing for the event subscription.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithPublishingEnabled(bool publishingEnabled)
     {
         _publishingEnabled = publishingEnabled;
         return this;
     }
 
+    /// <summary>
+    /// Sets the event type filter using a raw event type node id string.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithEventType(string eventTypeNodeId)
     {
         _eventTypeNode = new OpcUaNode(eventTypeNodeId);
         return this;
     }
 
+    /// <summary>
+    /// Sets the event type filter using a wrapped node reference.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithEventType(OpcUaNode eventTypeNode)
     {
         _eventTypeNode = eventTypeNode ?? throw new ArgumentNullException(nameof(eventTypeNode));
         return this;
     }
 
+    /// <summary>
+    /// Filters out events with severity lower than the specified threshold.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithSeverityAtLeast(ushort severity)
     {
         _severityAtLeast = severity;
         return this;
     }
 
+    /// <summary>
+    /// Sets the monitored item queue size for each event source.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithQueueSize(uint queueSize)
     {
         _queueSize = queueSize;
         return this;
     }
 
+    /// <summary>
+    /// Controls whether older events are discarded when the queue is full.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithDiscardOldest(bool discardOldest)
     {
         _discardOldest = discardOldest;
         return this;
     }
 
+    /// <summary>
+    /// Controls whether a condition refresh is issued after event sources are added.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithConditionRefreshOnStart(bool enabled = true)
     {
         _conditionRefreshOnStart = enabled;
         return this;
     }
 
+    /// <summary>
+    /// Selects whether event fields are gathered dynamically or from the fixed built-in field set.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithSelectClauseMode(OpcUaEventSelectClauseMode mode)
     {
         _selectClauseMode = mode;
         return this;
     }
 
+    /// <summary>
+    /// Filters suppressed or shelved alarms when that state can be determined.
+    /// </summary>
     public OpcUaEventSubscriptionBuilder WithIgnoreSuppressedOrShelved(bool enabled = true)
     {
         _ignoreSuppressedOrShelved = enabled;
         return this;
     }
 
+    /// <summary>
+    /// Creates the event subscription on the connected session without sources.
+    /// Add sources afterwards through the returned handle.
+    /// </summary>
     public Task<IOpcUaEventSubscription> BuildAsync(
         Action<OpcUaEventNotification> onEvent,
         CancellationToken ct = default)

@@ -1,7 +1,13 @@
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Describes a monitored node to be added to a data subscription.
+/// </summary>
 public sealed class OpcUaSubscriptionNodeDefinition
 {
+    /// <summary>
+    /// Initializes a new node definition from a raw OPC UA <c>NodeId</c> string.
+    /// </summary>
     public OpcUaSubscriptionNodeDefinition(
         string nodeId,
         Action<OpcUaValueChangeNotification> onChanged)
@@ -9,6 +15,9 @@ public sealed class OpcUaSubscriptionNodeDefinition
     {
     }
 
+    /// <summary>
+    /// Initializes a new node definition from an <see cref="OpcUaNode"/>.
+    /// </summary>
     public OpcUaSubscriptionNodeDefinition(
         OpcUaNode node,
         Action<OpcUaValueChangeNotification> onChanged)
@@ -17,12 +26,24 @@ public sealed class OpcUaSubscriptionNodeDefinition
         OnChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
     }
 
+    /// <summary>
+    /// Gets the node that should be monitored.
+    /// </summary>
     public OpcUaNode Node { get; }
 
+    /// <summary>
+    /// Gets the raw OPC UA <c>NodeId</c> string.
+    /// </summary>
     public string NodeId => Node.NodeId;
 
+    /// <summary>
+    /// Gets the callback invoked whenever the monitored item receives a data change notification.
+    /// </summary>
     public Action<OpcUaValueChangeNotification> OnChanged { get; }
 
+    /// <summary>
+    /// Gets the optional monitored-item settings applied when the node is added to the subscription.
+    /// </summary>
     public OpcUaMonitoredItemOptions Options { get; init; } = new();
 }
 

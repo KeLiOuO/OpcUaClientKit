@@ -1,7 +1,13 @@
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Provides helper methods for obtaining event-subscription capabilities from <see cref="IOpcUaClient"/>.
+/// </summary>
 public static class OpcUaClientEventSubscriptionExtensions
 {
+    /// <summary>
+    /// Casts an <see cref="IOpcUaClient"/> to <see cref="IEventSubscribableOpcUaClient"/> when the client was created by this library.
+    /// </summary>
     public static IEventSubscribableOpcUaClient AsEventSubscribable(this IOpcUaClient client)
     {
         if (client == null)

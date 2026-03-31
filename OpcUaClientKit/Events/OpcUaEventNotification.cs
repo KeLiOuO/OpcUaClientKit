@@ -2,8 +2,14 @@ using System.Collections.ObjectModel;
 
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Represents a normalized OPC UA alarm/condition event notification.
+/// </summary>
 public sealed class OpcUaEventNotification
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OpcUaEventNotification"/> class.
+    /// </summary>
     public OpcUaEventNotification(
         byte[]? eventId,
         string eventTypeNodeId,
@@ -61,37 +67,88 @@ public sealed class OpcUaEventNotification
                 new Dictionary<string, object?>(fields, StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// Gets the event identifier emitted by the server.
+    /// </summary>
     public byte[] EventId { get; }
 
+    /// <summary>
+    /// Gets the event type <c>NodeId</c>.
+    /// </summary>
     public string EventTypeNodeId { get; }
 
+    /// <summary>
+    /// Gets the source object/view <c>NodeId</c> reported by the server.
+    /// </summary>
     public string? SourceNodeId { get; }
 
+    /// <summary>
+    /// Gets the optional display name associated with the subscribed event source.
+    /// </summary>
     public string? SourceDisplayName { get; }
 
+    /// <summary>
+    /// Gets the source name reported by the OPC UA server.
+    /// </summary>
     public string? SourceName { get; }
 
+    /// <summary>
+    /// Gets the event timestamp.
+    /// </summary>
     public DateTime Time { get; }
 
+    /// <summary>
+    /// Gets the receive timestamp reported by the server.
+    /// </summary>
     public DateTime ReceiveTime { get; }
 
+    /// <summary>
+    /// Gets the localized message text carried by the event, if present.
+    /// </summary>
     public string? Message { get; }
 
+    /// <summary>
+    /// Gets the event severity.
+    /// </summary>
     public ushort Severity { get; }
 
+    /// <summary>
+    /// Gets the condition instance identifier, when available.
+    /// </summary>
     public string? ConditionId { get; }
 
+    /// <summary>
+    /// Gets the condition name, when available.
+    /// </summary>
     public string? ConditionName { get; }
 
+    /// <summary>
+    /// Gets the retained-state flag, when available.
+    /// </summary>
     public bool? Retain { get; }
 
+    /// <summary>
+    /// Gets the enabled-state flag, when available.
+    /// </summary>
     public bool? Enabled { get; }
 
+    /// <summary>
+    /// Gets the active-state flag, when available.
+    /// </summary>
     public bool? Active { get; }
 
+    /// <summary>
+    /// Gets the acknowledged-state flag, when available.
+    /// </summary>
     public bool? Acked { get; }
 
+    /// <summary>
+    /// Gets the selected event fields in the same order as the generated select clauses.
+    /// </summary>
     public IReadOnlyList<OpcUaEventFieldValue> SelectedFields { get; }
 
+    /// <summary>
+    /// Gets the selected event fields as a dictionary keyed by the library's normalized field names.
+    /// </summary>
     public IReadOnlyDictionary<string, object?> Fields { get; }
 }

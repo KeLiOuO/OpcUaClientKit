@@ -1,40 +1,47 @@
 # OpcUaClientKit
 
-`OpcUaClientKit` 是一个轻量、通用、可复用的 OPC UA 客户端封装，基于 `OPCFoundation.NetStandard.Opc.Ua.Client`，适合在 Console、WinForms、WPF、ASP.NET Core、Worker Service 等项目中直接使用。
+`OpcUaClientKit` 是一个轻量、可复用的 OPC UA 客户端类库，基于 `OPCFoundation.NetStandard.Opc.Ua.Client`，目标是把日常项目里最常用的 OPC UA 客户端能力收敛成一套简单、稳定、可扩展的 API。
 
-它的目标不是做一个很重的企业级框架，而是把 OPC UA 客户端最常用的能力整理成一套简单、清晰、可扩展的 API。
+它适合这类场景：
+
+- Console 工具
+- WinForms / WPF 桌面程序
+- ASP.NET Core / Worker Service
+- 需要快速集成 OPC UA 连接、读写、方法调用和订阅能力的业务项目
 
 ## 功能概览
 
 - 工厂模式创建客户端
-- 简单配置和复杂配置两种使用方式
-- 自动完成客户端配置、证书检查/生成、Endpoint 选择、用户身份、Session 创建
-- 单节点和批量读写
-- 方法调用
+- 简单参数重载和 Builder 两种配置方式
+- 自动完成配置、证书检查/生成、Endpoint 选择、用户身份和 Session 创建
+- 单节点读取、泛型读取、批量读取
+- 单节点写入、批量写入
+- OPC UA 方法调用
 - 数据订阅
 - 报警事件订阅
-- 支持原始 `nodeId` 和封装后的 `OpcUaNode`
+- 同时支持原始 `nodeId` 和封装后的 `OpcUaNode`
 
 ## 目标框架
 
 当前类库使用 `netstandard2.1` 构建。
 
-这意味着它适合用于支持 `netstandard2.1` 的现代 .NET 项目，例如：
+这意味着它可以直接用于支持 `netstandard2.1` 的现代 .NET 项目，例如：
 
 - `.NET Core 3.1`
-- `.NET 5/6/7/8/...`
-
-如果后续需要兼容较老的 `.NET Framework` 项目，需要再评估是否下探到 `netstandard2.0`。
+- `.NET 5`
+- `.NET 6`
+- `.NET 7`
+- `.NET 8+`
 
 ## 安装
 
-如果你是本地项目引用：
+本地项目引用：
 
 ```xml
 <ProjectReference Include="..\OpcUaClientKit\OpcUaClientKit.csproj" />
 ```
 
-如果你已经打成 NuGet 包：
+NuGet 安装：
 
 ```bash
 dotnet add package OpcUaClientKit
@@ -50,56 +57,9 @@ dotnet add package OpcUaClientKit
 - `ISubscribableOpcUaClient`
 - `IEventSubscribableOpcUaClient`
 
-## 项目结构
-
-当前类库按职责做了分层整理：
-
-- `Abstractions`
-  - 公共接口定义，例如客户端、数据订阅、事件订阅相关接口
-- `Client`
-  - 客户端核心实现、工厂、Builder 和路径辅助逻辑
-- `Configuration`
-  - 客户端配置模型
-- `DependencyInjection`
-  - ASP.NET Core / Worker Service 的 DI 扩展
-- `Events`
-  - 报警事件订阅相关类型、Builder、通知 DTO 和内部过滤定义
-- `Extensions`
-  - `AsSubscribable()`、`AsEventSubscribable()` 这类扩展入口
-- `Models`
-  - 通用节点模型，例如 `OpcUaNode`
-- `Subscriptions`
-  - 数据订阅相关类型、Builder、通知 DTO 和运行句柄
-- `Samples`
-  - 参考配置文件和示例资源
-
-根目录只保留项目文件、README 和少量必须的入口文件，避免源码继续扁平堆在一起。
-
 ## 快速开始
 
-### 1. 最简单的连接方式
-
-```csharp
-using OpcUaClientKit;
-
-IOpcUaClientFactory factory = new OpcUaClientFactory();
-
-await using var client = factory.Create(
-    serverUrl: "opc.tcp://127.0.0.1:4840",
-    applicationName: "MyOpcUaApp",
-    autoAcceptUntrustedServerCertificate: true,
-    useSecurity: true,
-    sessionTimeout: 60000);
-
-await client.ConnectAsync();
-
-var value = await client.ReadNodeAsync("ns=3;s=/Plc/DB66.DBW0");
-Console.WriteLine(value);
-
-await client.DisconnectAsync();
-```
-
-### 2. 用户名密码连接
+最简单的连接方式：
 
 ```csharp
 using OpcUaClientKit;
@@ -117,38 +77,39 @@ await using var client = factory.Create(
     sessionTimeout: 60000);
 
 await client.ConnectAsync();
+
+var value = await client.ReadNodeAsync("ns=6;s=MyLevel");
+Console.WriteLine(value);
 ```
 
 ## 简单配置与复杂配置
 
 ### 简单配置
 
-简单配置适合大多数项目，工厂直接暴露最常用参数：
+简单配置适合大多数业务代码：
 
-- `serverUrl`
-- `applicationName`
-- `deviceId`
-- `userName/password`
-- `autoAcceptUntrustedServerCertificate`
-- `useSecurity`
-- `sessionTimeout`
+```csharp
+var client = factory.Create(
+    serverUrl: "opc.tcp://127.0.0.1:4840",
+    applicationName: "MyOpcUaApp",
+    deviceId: "device-a",
+    userName: "OpcUaClient",
+    password: "123456",
+    autoAcceptUntrustedServerCertificate: true);
+```
 
-当提供 `deviceId` 时，默认会按下面的目录组织证书：
+当提供 `deviceId` 时，默认 PKI 目录会按下面的结构组织：
 
 ```text
 %LocalApplicationData%\OPC Foundation\<applicationName>\<deviceId>\pki
 ```
 
-### 复杂配置
+### Builder 配置
 
-复杂配置适合你需要更细粒度控制时使用：
+当你需要更细粒度控制时，可以使用 Builder：
 
 ```csharp
-using OpcUaClientKit;
-
-IOpcUaClientFactory factory = new OpcUaClientFactory();
-
-var client = factory
+var client = await factory
     .CreateBuilder()
     .WithServerUrl("opc.tcp://127.0.0.1:4840")
     .WithApplicationName("MyOpcUaApp")
@@ -159,67 +120,51 @@ var client = factory
     .WithOperationTimeout(30000)
     .WithCheckDomain(false)
     .WithAutoAcceptUntrustedServerCertificate(true)
-    .Build();
-
-await using var _ = client;
-await client.ConnectAsync();
+    .BuildConnectedAsync();
 ```
 
-如果你喜欢直接传完整配置对象，也可以使用 `OpcUaClientOptions`：
+也可以直接传完整配置对象：
 
 ```csharp
-using OpcUaClientKit;
-
 var options = new OpcUaClientOptions
 {
     ServerUrl = "opc.tcp://127.0.0.1:4840",
     ApplicationName = "MyOpcUaApp",
     DeviceId = "device-c",
-    UseSecurity = true,
-    SessionTimeout = 60000,
     UserName = "OpcUaClient",
     Password = "123456",
+    UseSecurity = true,
+    SessionTimeout = 60000,
     Certificate =
     {
         AutoAcceptUntrustedServerCertificate = true
     }
 };
 
-IOpcUaClientFactory factory = new OpcUaClientFactory();
-await using var client = factory.Create(options);
-await client.ConnectAsync();
+await using var client = await factory.CreateConnectedAsync(options);
 ```
 
 ## 节点封装
 
-如果你希望在读、写、订阅时带上业务显示名，可以使用 `OpcUaNode`：
+如果你希望在读、写、订阅时保留业务显示名，可以使用 `OpcUaNode`：
 
 ```csharp
-using OpcUaClientKit;
-
-var levelNode = new OpcUaNode("ns=6;s=MyLevel", "液位");
+var levelNode = new OpcUaNode("ns=6;s=MyLevel", "Level");
 var value = await client.ReadNodeAsync(levelNode);
 ```
 
-`OpcUaNode` 不会替代原始 `nodeId`，只是一个更易用的轻量封装。库里大部分 API 同时支持这两种写法。
+原始 `string nodeId` 调用方式仍然保留，`OpcUaNode` 只是更易用的轻量封装。
 
-## 读写教程
+## 读写
 
-### 单节点读取
+单节点读取：
 
 ```csharp
-var value = await client.ReadNodeAsync("ns=6;s=MyLevel");
+var rawValue = await client.ReadNodeAsync("ns=6;s=MyLevel");
 var typedValue = await client.ReadNodeAsync<double>("ns=6;s=MyLevel");
 ```
 
-### 使用 `OpcUaNode` 读取
-
-```csharp
-var levelNode = new OpcUaNode("ns=6;s=MyLevel", "液位");
-var value = await client.ReadNodeAsync(levelNode);
-```
-
-### 批量读取
+批量读取：
 
 ```csharp
 var values = await client.ReadNodesAsync(new[]
@@ -229,19 +174,19 @@ var values = await client.ReadNodesAsync(new[]
 });
 ```
 
-### 单节点写入
+单节点写入：
 
 ```csharp
 await client.WriteNodeAsync("ns=3;s=/Plc/DB66.DBW0", (short)1);
 ```
 
-### 批量写入
+批量写入：
 
 ```csharp
 await client.WriteNodesAsync(new Dictionary<string, object?>
 {
-    ["ns=3;s=/Plc/DB66.DBW2"] = (short)3,
-    ["ns=3;s=/Plc/DB66.DBW0"] = (short)1
+    ["ns=3;s=/Plc/DB66.DBW0"] = (short)1,
+    ["ns=3;s=/Plc/DB66.DBW2"] = (short)3
 });
 ```
 
@@ -258,36 +203,23 @@ await client.WriteNodesAsync(new Dictionary<OpcUaNode, object?>
 });
 ```
 
-## 方法调用教程
-
-### 使用原始 `nodeId`
+## 方法调用
 
 ```csharp
-var outputs = await client.CallMethodAsync(
-    objectNodeId: "ns=3;s=/Objects/MyDevice",
-    methodNodeId: "ns=3;s=/Objects/MyDevice/Start",
-    inputArguments: new object?[] { (short)1, true });
-```
-
-### 使用 `OpcUaNode`
-
-```csharp
-var objectNode = new OpcUaNode("ns=3;s=/Objects/MyDevice", "MyDevice");
-var methodNode = new OpcUaNode("ns=3;s=/Objects/MyDevice/Start", "Start");
+var objectNode = new OpcUaNode("ns=6;s=MyDevice", "MyDevice");
+var methodNode = new OpcUaNode("ns=6;s=MyMethod", "MyMethod");
 
 var outputs = await client.CallMethodAsync(
     objectNode,
     methodNode,
-    new object?[] { (short)1, true });
+    new object?[] { "sin", 90d });
 ```
 
-## 数据订阅教程
+## 数据订阅
 
-### 快速订阅单节点
+快速订阅单节点：
 
 ```csharp
-using OpcUaClientKit;
-
 var subscribable = client.AsSubscribable();
 
 await using var subscription = await subscribable.SubscribeNodeAsync(
@@ -299,71 +231,33 @@ await using var subscription = await subscribable.SubscribeNodeAsync(
     });
 ```
 
-### 创建订阅组，再动态添加节点
+创建空订阅组，再动态添加节点：
 
 ```csharp
-using OpcUaClientKit;
-
 var subscribable = client.AsSubscribable();
 
 await using var subscription = await subscribable
     .CreateSubscriptionBuilder()
-    .WithName("plc-values")
+    .WithName("runtime-data")
     .WithPublishingInterval(250)
     .BuildAsync();
-
-await subscription.AddNodeAsync(
-    new OpcUaNode("ns=3;s=/Plc/DB66.DBW2", "速度"),
-    notification =>
-    {
-        Console.WriteLine($"{notification.DisplayName} = {notification.Value}");
-    });
 
 await subscription.AddNodesAsync(new[]
 {
     new OpcUaSubscriptionNodeDefinition(
-        new OpcUaNode("ns=3;s=/Plc/DB66.DBW0", "启停"),
+        new OpcUaNode("ns=3;s=/Plc/DB66.DBW0", "WritableNode1"),
         notification => Console.WriteLine($"{notification.DisplayName} = {notification.Value}")),
     new OpcUaSubscriptionNodeDefinition(
-        new OpcUaNode("ns=6;s=MyLevel", "液位"),
+        new OpcUaNode("ns=6;s=MyLevel", "Level"),
         notification => Console.WriteLine($"{notification.DisplayName} = {notification.Value}"))
 });
 ```
 
-### 删除订阅节点
+## 报警事件订阅
+
+创建空事件订阅组，再动态添加事件源：
 
 ```csharp
-await subscription.RemoveNodeAsync("ns=3;s=/Plc/DB66.DBW0");
-```
-
-## 报警事件订阅教程
-
-### 快速订阅报警事件
-
-```csharp
-using OpcUaClientKit;
-
-var eventClient = client.AsEventSubscribable();
-
-await using var subscription = await eventClient
-    .CreateEventSubscriptionBuilder()
-    .WithName("alarm-events")
-    .WithPublishingInterval(500)
-    .BuildAsync(notification =>
-    {
-        Console.WriteLine(
-            $"[{notification.Time:HH:mm:ss}] {notification.SourceName} | " +
-            $"Message={notification.Message} | Severity={notification.Severity}");
-    });
-
-await subscription.AddSourceAsync(new OpcUaNode("ns=6;s=MyObjectsFolder", "AlarmRoot"));
-```
-
-### 常用事件订阅选项
-
-```csharp
-using OpcUaClientKit;
-
 var eventClient = client.AsEventSubscribable();
 
 await using var subscription = await eventClient
@@ -371,98 +265,103 @@ await using var subscription = await eventClient
     .WithName("alarm-events")
     .WithPublishingInterval(500)
     .WithConditionRefreshOnStart(true)
-    .WithIgnoreSuppressedOrShelved(true)
     .WithSelectClauseMode(OpcUaEventSelectClauseMode.Dynamic)
     .BuildAsync(notification =>
     {
-        Console.WriteLine(notification.Message);
-
-        foreach (var field in notification.SelectedFields)
-        {
-            Console.WriteLine($"{field.DisplayName}: {field.Value}");
-        }
+        Console.WriteLine(
+            $"[{notification.Time:HH:mm:ss}] {notification.SourceName} | " +
+            $"Message={notification.Message} | Severity={notification.Severity}");
     });
+
+await subscription.AddSourceAsync(new OpcUaNode("ns=6;s=MyObjectsFolder", "MyObjects"));
 ```
 
-### 事件订阅说明
+说明：
 
 - 默认事件类型是 `AlarmConditionType`
 - 默认 `SelectClauses` 模式是 `Dynamic`
+- `Fixed` 模式仍然保留
 - 默认会在添加事件源后执行 `ConditionRefresh`
-- `Refresh Start` / `Refresh End` 边界事件已经在库内过滤，不会再回调到业务层
-- `SelectedFields` 按实际 `SelectClauses` 顺序返回，适合做调试和通用事件表展示
-- 强类型字段适合业务层直接消费
+- `Refresh Start` / `Refresh End` 已在库内过滤
+- `SelectedFields` 会按实际 `SelectClauses` 顺序返回，适合调试和通用表格展示
 
-## 典型使用流程
+## 项目结构
 
-一个比较完整的使用过程通常是：
-
-1. 创建 `IOpcUaClient`
-2. `ConnectAsync()`
-3. 执行读、写、方法调用
-4. 建立数据订阅或事件订阅
-5. 退出前 `DisconnectAsync()` 或直接 `DisposeAsync()`
-
-例如：
-
-```csharp
-using OpcUaClientKit;
-
-IOpcUaClientFactory factory = new OpcUaClientFactory();
-
-await using var client = factory.Create(
-    "opc.tcp://127.0.0.1:4840",
-    "MyOpcUaApp",
-    "device-a",
-    "OpcUaClient",
-    "123456",
-    autoAcceptUntrustedServerCertificate: true);
-
-await client.ConnectAsync();
-
-var currentLevel = await client.ReadNodeAsync<double>("ns=6;s=MyLevel");
-await client.WriteNodeAsync("ns=3;s=/Plc/DB66.DBW0", (short)1);
-
-var outputs = await client.CallMethodAsync(
-    "ns=3;s=/Objects/MyDevice",
-    "ns=3;s=/Objects/MyDevice/Reset");
-
-var subscribable = client.AsSubscribable();
-await using var dataSubscription = await subscribable
-    .CreateSubscriptionBuilder()
-    .WithName("runtime-data")
-    .WithPublishingInterval(500)
-    .BuildAsync();
-
-await dataSubscription.AddNodeAsync(
-    new OpcUaNode("ns=6;s=MyLevel", "液位"),
-    notification => Console.WriteLine($"{notification.DisplayName} = {notification.Value}"));
-
-Console.ReadLine();
-```
+- `Abstractions`
+  - 公共接口定义
+- `Client`
+  - 客户端核心、工厂、Builder 和连接流程
+- `Configuration`
+  - 客户端配置模型
+- `DependencyInjection`
+  - DI 扩展
+- `Events`
+  - 报警事件订阅相关类型
+- `Extensions`
+  - `AsSubscribable()`、`AsEventSubscribable()` 扩展入口
+- `Models`
+  - 通用节点模型
+- `Subscriptions`
+  - 数据订阅相关类型
+- `Samples`
+  - 参考配置样例
 
 ## Demo 项目
 
-当前解决方案里提供了几个示例项目：
+当前解决方案里只保留一个新的规范化 console demo：
 
 - `OpcUaClientKit.Demo`
-- `OpcUaClientKit.EventDemo`
-- `MyDemo`
 
-如果你想快速看代码用法，建议优先从这几个 demo 开始。
+这个 demo 按场景拆分：
 
-## 当前暂未覆盖的能力
+- `quickstart`
+- `readwrite`
+- `method`
+- `data-sub`
+- `event-sub`
 
-目前这个库已经覆盖了常用的连接、读写、方法、数据订阅、报警事件订阅，但还没有做这些增强项：
+运行示例：
+
+```bash
+dotnet run --project C:\Code\ConsoleApp\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- quickstart
+```
+
+Demo 配置文件：
+
+- `C:\Code\ConsoleApp\OpcUaClientKit.Demo\DemoSettings.json`
+
+## 回归测试
+
+当前解决方案还包含一个基于真实服务器联调的回归测试项目：
+
+- `OpcUaClientKit.RegressionTests`
+
+默认测试场景基于本地 `Prosys OPC UA Simulation Server`，覆盖：
+
+- 连接 / 断开
+- 单点与批量读写
+- 方法调用
+- 数据订阅
+- 事件订阅
+
+运行方式：
+
+```bash
+dotnet test C:\Code\ConsoleApp\OpcUaClientKit.RegressionTests\OpcUaClientKit.RegressionTests.csproj
+```
+
+## 当前边界
+
+当前版本已经覆盖常见的连接、读写、方法、数据订阅和报警事件订阅，但仍未包含这些增强项：
 
 - 自动重连和订阅恢复
 - 报警 Ack / Confirm / Shelve / Unshelve
-- Browse / 元数据浏览能力
+- Browse / 节点元数据浏览
 - 历史数据 / 历史事件读取
 - 更高级的自定义事件过滤器
-- 更完整的复杂结构体/UDT 高层封装
+- 更完整的复杂结构体 / UDT 高层封装
 
-如果你的主要使用场景就是：
+如果你的主要场景是：
 
 - 读变量
 - 写变量

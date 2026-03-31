@@ -1,7 +1,13 @@
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Provides helper methods for obtaining data-subscription capabilities from <see cref="IOpcUaClient"/>.
+/// </summary>
 public static class OpcUaClientSubscriptionExtensions
 {
+    /// <summary>
+    /// Casts an <see cref="IOpcUaClient"/> to <see cref="ISubscribableOpcUaClient"/> when the client was created by this library.
+    /// </summary>
     public static ISubscribableOpcUaClient AsSubscribable(this IOpcUaClient client)
     {
         if (client == null)

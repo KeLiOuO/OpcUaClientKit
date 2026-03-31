@@ -1,5 +1,8 @@
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Builds a data subscription group for monitored value changes.
+/// </summary>
 public sealed class OpcUaSubscriptionBuilder
 {
     private readonly OpcUaClient _client;
@@ -16,48 +19,73 @@ public sealed class OpcUaSubscriptionBuilder
         _client = client ?? throw new ArgumentNullException(nameof(client));
     }
 
+    /// <summary>
+    /// Sets a friendly name for the subscription.
+    /// </summary>
     public OpcUaSubscriptionBuilder WithName(string name)
     {
         _name = name;
         return this;
     }
 
+    /// <summary>
+    /// Sets the publishing interval in milliseconds.
+    /// </summary>
     public OpcUaSubscriptionBuilder WithPublishingInterval(int milliseconds)
     {
         _publishingInterval = milliseconds;
         return this;
     }
 
+    /// <summary>
+    /// Sets the keep-alive count used by the server.
+    /// </summary>
     public OpcUaSubscriptionBuilder WithKeepAliveCount(uint keepAliveCount)
     {
         _keepAliveCount = keepAliveCount;
         return this;
     }
 
+    /// <summary>
+    /// Sets the lifetime count used by the server.
+    /// </summary>
     public OpcUaSubscriptionBuilder WithLifetimeCount(uint lifetimeCount)
     {
         _lifetimeCount = lifetimeCount;
         return this;
     }
 
+    /// <summary>
+    /// Sets the maximum number of notifications returned per publish response.
+    /// </summary>
     public OpcUaSubscriptionBuilder WithMaxNotificationsPerPublish(uint maxNotificationsPerPublish)
     {
         _maxNotificationsPerPublish = maxNotificationsPerPublish;
         return this;
     }
 
+    /// <summary>
+    /// Sets the subscription priority.
+    /// </summary>
     public OpcUaSubscriptionBuilder WithPriority(byte priority)
     {
         _priority = priority;
         return this;
     }
 
+    /// <summary>
+    /// Enables or disables publishing for the subscription.
+    /// </summary>
     public OpcUaSubscriptionBuilder WithPublishingEnabled(bool publishingEnabled)
     {
         _publishingEnabled = publishingEnabled;
         return this;
     }
 
+    /// <summary>
+    /// Creates the subscription on the connected session without monitored items.
+    /// Add nodes afterwards through the returned subscription handle.
+    /// </summary>
     public Task<IOpcUaSubscription> BuildAsync(CancellationToken ct = default)
     {
         return _client.BuildSubscriptionAsync(CreateRequest(), ct);

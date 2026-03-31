@@ -2,6 +2,9 @@ using Opc.Ua;
 
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Well-known event field keys used to map raw OPC UA event fields into stable DTO properties.
+/// </summary>
 internal static class OpcUaEventFieldKeys
 {
     public const string NodeId = "NodeId";
@@ -53,6 +56,9 @@ internal sealed class OpcUaEventFilterDefinition
     public bool CanFallbackToClientSideSuppressedOrShelvedFilter => IgnoreSuppressedOrShelved;
 }
 
+/// <summary>
+/// Describes a single selected event field and the operand used to request it from the server.
+/// </summary>
 internal sealed class OpcUaEventSelectClauseDescriptor
 {
     public OpcUaEventSelectClauseDescriptor(

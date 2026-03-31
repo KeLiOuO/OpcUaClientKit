@@ -5,12 +5,18 @@ using Opc.Ua.Configuration;
 
 namespace OpcUaClientKit;
 
+/// <summary>
+/// Creates <see cref="IOpcUaClient"/> instances and owns the OPC UA connection bootstrap pipeline.
+/// </summary>
 public sealed class OpcUaClientFactory : IOpcUaClientFactory
 {
     private const ushort DefaultCertificateLifetimeInMonths = 120;
     private static readonly IList<string> s_preferredLocales = new List<string>();
     private static readonly ITelemetryContext s_telemetry = DefaultTelemetry.Create(_ => { });
 
+    /// <summary>
+    /// Creates a disconnected client with anonymous identity and simple options.
+    /// </summary>
     public IOpcUaClient Create(
         string serverUrl,
         string applicationName,
@@ -31,6 +37,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         });
     }
 
+    /// <summary>
+    /// Creates a disconnected client with anonymous identity and device-specific certificate storage.
+    /// </summary>
     public IOpcUaClient Create(
         string serverUrl,
         string applicationName,
@@ -53,6 +62,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         });
     }
 
+    /// <summary>
+    /// Creates a disconnected client with username and password credentials.
+    /// </summary>
     public IOpcUaClient Create(
         string serverUrl,
         string applicationName,
@@ -77,6 +89,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         });
     }
 
+    /// <summary>
+    /// Creates a disconnected client with username and password credentials plus device-specific certificate storage.
+    /// </summary>
     public IOpcUaClient Create(
         string serverUrl,
         string applicationName,
@@ -103,12 +118,18 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         });
     }
 
+    /// <summary>
+    /// Creates a disconnected client from a complete options object.
+    /// </summary>
     public IOpcUaClient Create(OpcUaClientOptions options)
     {
         var normalizedOptions = NormalizeOptions(options);
         return CreateClientCore(normalizedOptions);
     }
 
+    /// <summary>
+    /// Creates and connects an anonymous client using the simple parameter set.
+    /// </summary>
     public async Task<IOpcUaClient> CreateConnectedAsync(
         string serverUrl,
         string applicationName,
@@ -127,6 +148,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         return client;
     }
 
+    /// <summary>
+    /// Creates and connects an anonymous client using device-specific certificate storage.
+    /// </summary>
     public async Task<IOpcUaClient> CreateConnectedAsync(
         string serverUrl,
         string applicationName,
@@ -147,6 +171,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         return client;
     }
 
+    /// <summary>
+    /// Creates and connects a username/password client using the simple parameter set.
+    /// </summary>
     public async Task<IOpcUaClient> CreateConnectedAsync(
         string serverUrl,
         string applicationName,
@@ -169,6 +196,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         return client;
     }
 
+    /// <summary>
+    /// Creates and connects a username/password client using device-specific certificate storage.
+    /// </summary>
     public async Task<IOpcUaClient> CreateConnectedAsync(
         string serverUrl,
         string applicationName,
@@ -193,6 +223,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         return client;
     }
 
+    /// <summary>
+    /// Creates and connects a client from a complete options object.
+    /// </summary>
     public async Task<IOpcUaClient> CreateConnectedAsync(
         OpcUaClientOptions options,
         CancellationToken ct = default)
@@ -202,6 +235,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         return client;
     }
 
+    /// <summary>
+    /// Creates a fluent builder for advanced client configuration.
+    /// </summary>
     public OpcUaClientBuilder CreateBuilder()
     {
         return new OpcUaClientBuilder(this);
@@ -221,6 +257,8 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
             options.DeviceId);
         var sessionName = options.SessionName ?? effectiveApplicationName;
 
+        // Keep the bootstrap order explicit so configuration, certificates, endpoint selection
+        // and session creation always operate on the same normalized option set.
         var configuration = await BuildApplicationConfigurationAsync(
                 options,
                 effectiveApplicationName,
@@ -323,6 +361,8 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         string effectiveApplicationName,
         CancellationToken ct)
     {
+        // The SDK expects a complete PKI layout up front. Creating the directories here keeps
+        // certificate generation and trust-list updates self-contained for callers.
         var pkiRoot = ResolvePkiRootPath(options);
         var ownStorePath = EnsureDirectory(Path.Combine(pkiRoot, "own"));
         var trustedStorePath = EnsureDirectory(Path.Combine(pkiRoot, "trusted"));
@@ -388,6 +428,7 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
             ApplicationConfiguration = configuration
         };
 
+        // This call both loads an existing application certificate and creates one on first use.
         var hasApplicationCertificate = await application
             .CheckApplicationInstanceCertificatesAsync(true, DefaultCertificateLifetimeInMonths, ct)
             .ConfigureAwait(false);
@@ -413,6 +454,7 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         OpcUaClientOptions options,
         CancellationToken ct)
     {
+        // Let the SDK negotiate the best endpoint for the requested security mode and server.
         var endpointDescription = await CoreClientUtils
             .SelectEndpointAsync(
                 configuration,
@@ -449,6 +491,8 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         OpcUaClientOptions options,
         CancellationToken ct)
     {
+        // Session creation is the last step after configuration, certificate handling and
+        // endpoint discovery have completed successfully.
         var sessionFactory = new DefaultSessionFactory(s_telemetry);
         return await sessionFactory
             .CreateAsync(

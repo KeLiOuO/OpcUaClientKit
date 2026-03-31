@@ -801,6 +801,8 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             subscription.EnsureActive();
             var session = GetRequiredSession();
 
+            // Validate all requested sources before touching the live subscription so callers
+            // either add the whole batch successfully or fail before any server-side mutation.
             foreach (var sourceNode in normalizedSourceNodes)
             {
                 if (subscription.ContainsSource(sourceNode.NodeId))
@@ -816,6 +818,8 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
             while (true)
             {
+                // Build registrations against the current filter mode. If the server rejects the
+                // SuppressedOrShelved predicate we can retry once with client-side filtering only.
                 var monitoredItems = CreateEventMonitoredItemRegistrations(
                     normalizedSourceNodes,
                     filterDefinition,
@@ -849,9 +853,13 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 {
                     if (conditionRefreshOnStart)
                     {
+                        // ConditionRefresh asks the server to replay retained conditions for the
+                        // subscription so a newly added source can synchronize current alarms.
                         await subscription.Subscription.ConditionRefreshAsync(ct).ConfigureAwait(false);
                     }
 
+                    // Only update the local registry after both ApplyChangesAsync and the optional
+                    // refresh succeeded, otherwise the handle could claim a source that rolled back.
                     subscription.AddRegistrations(monitoredItems);
                     break;
                 }
@@ -1271,6 +1279,8 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         var selectedFields = new List<OpcUaEventFieldValue>(registration.FilterDefinition.SelectClauses.Count);
         var fieldValues = eventFieldList.EventFields ?? new VariantCollection();
 
+        // The server returns event fields in the exact SelectClause order, so we rebuild both a
+        // stable dictionary view and an ordered field list from the stored descriptors.
         for (var i = 0; i < registration.FilterDefinition.SelectClauses.Count; i++)
         {
             var descriptor = registration.FilterDefinition.SelectClauses[i];
@@ -1534,6 +1544,8 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         var visitedNodes = new HashSet<string>(StringComparer.Ordinal);
         var parentPath = new QualifiedNameCollection();
 
+        // Walk the inheritance tree from the top-most supertype down so base event fields appear
+        // first and derived-type fields are appended deterministically.
         for (var i = superTypes.Count - 1; i >= 0; i--)
         {
             await CollectEventFieldsAsync(

@@ -1,0 +1,52 @@
+{
+  "serverUrl": "opc.tcp://127.0.0.1:4840",
+  "applicationName": "OpcUaClientKitDemo",
+  "simpleDeviceId": "demo-simple",
+  "advancedDeviceId": "demo-advanced",
+  "userName": "OpcUaClient",
+  "password": "123456",
+  "autoAcceptUntrustedServerCertificate": true,
+  "useSecurity": true,
+  "sessionTimeout": 60000,
+  "operationTimeout": 30000,
+  "checkDomain": false,
+  "waitTimeoutSeconds": 15,
+  "conditionRefreshOnStart": true,
+  "ignoreSuppressedOrShelved": false,
+  "eventSelectClauseMode": "Dynamic",
+  "eventFieldPreviewCount": 12,
+  "levelNode": {
+    "nodeId": "ns=6;s=MyLevel",
+    "displayName": "Level"
+  },
+  "writableNode1": {
+    "nodeId": "ns=3;s=/Plc/DB66.DBW0",
+    "displayName": "WritableNode1"
+  },
+  "writableNode2": {
+    "nodeId": "ns=3;s=/Plc/DB66.DBW2",
+    "displayName": "WritableNode2"
+  },
+  "methodObjectNode": {
+    "nodeId": "ns=6;s=MyDevice",
+    "displayName": "MyDevice"
+  },
+  "methodNode": {
+    "nodeId": "ns=6;s=MyMethod",
+    "displayName": "MyMethod"
+  },
+  "alarmSourceNode": {
+    "nodeId": "ns=6;s=MyObjectsFolder",
+    "displayName": "MyObjects"
+  },
+  "singleWriteValue": 1,
+  "batchWriteValue1": 1,
+  "batchWriteValue2": 3,
+  "subscriptionWriteValue": 5,
+  "eventClearValue": 10.0,
+  "eventActiveValue": 120.0,
+  "methodTextArgument": "sin",
+  "methodNumericArgument": 90.0,
+  "methodExpectedFirstOutput": 1.0,
+  "methodExpectedTolerance": 0.000001
+}
