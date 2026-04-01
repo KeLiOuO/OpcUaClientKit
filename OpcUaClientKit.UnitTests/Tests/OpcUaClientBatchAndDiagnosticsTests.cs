@@ -8,6 +8,22 @@ namespace OpcUaClientKit.UnitTests.Tests;
 public sealed class OpcUaClientBatchAndDiagnosticsTests
 {
     [Fact]
+    public void Builder_allows_clearing_diagnostics_handler_with_null()
+    {
+        var factory = new OpcUaClientFactory();
+
+        var exception = Record.Exception(() =>
+            factory
+                .CreateBuilder()
+                .WithServerUrl("opc.tcp://127.0.0.1:4840")
+                .WithApplicationName("UnitTests")
+                .WithDiagnosticsHandler(null)
+                .Build());
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
     public void BuildReadResults_throws_aggregate_exception_with_partial_successes()
     {
         var nodeIds = new[] { "ns=2;s=Node1", "ns=2;s=Node2", "ns=2;s=Node3" };

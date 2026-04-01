@@ -12,6 +12,16 @@ namespace OpcUaClientKit;
 public interface IOpcUaClient : IAsyncDisposable
 {
     /// <summary>
+    /// Gets the configured application name used for the client identity and certificate subject.
+    /// </summary>
+    string ApplicationName { get; }
+
+    /// <summary>
+    /// Gets the configured logical device identifier, if one was supplied during client creation.
+    /// </summary>
+    string? DeviceId { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the underlying OPC UA session is currently connected.
     /// </summary>
     bool IsConnected { get; }

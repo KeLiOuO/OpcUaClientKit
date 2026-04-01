@@ -9,6 +9,22 @@ namespace OpcUaClientKit.UnitTests.Tests;
 public sealed class OpcUaClientLifecycleConcurrencyTests
 {
     [Fact]
+    public void Exposes_application_name_and_device_id_from_options()
+    {
+        IOpcUaClient client = new OpcUaClient(
+            new OpcUaClientOptions
+            {
+                ServerUrl = "opc.tcp://127.0.0.1:4840",
+                ApplicationName = "UnitTests",
+                DeviceId = "device-a"
+            },
+            (_, _) => Task.FromException<OpcUaClientConnection>(new InvalidOperationException("Not used")));
+
+        Assert.Equal("UnitTests", client.ApplicationName);
+        Assert.Equal("device-a", client.DeviceId);
+    }
+
+    [Fact]
     public async Task DisposeAsync_and_DisconnectAsync_concurrently_cleanup_subscriptions_once()
     {
         var session = CreateConnectedSessionMock();

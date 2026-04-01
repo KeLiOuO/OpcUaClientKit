@@ -98,11 +98,11 @@ public sealed class OpcUaClientBuilder
 
     /// <summary>
     /// Registers a client-level diagnostics handler used to observe non-fatal subscription callback
-    /// exceptions and other recoverable warnings.
+    /// exceptions and other recoverable warnings. Pass <c>null</c> to clear the current handler.
     /// </summary>
-    public OpcUaClientBuilder WithDiagnosticsHandler(Action<OpcUaClientDiagnosticEvent> handler)
+    public OpcUaClientBuilder WithDiagnosticsHandler(Action<OpcUaClientDiagnosticEvent>? handler)
     {
-        _options.DiagnosticsHandler = handler ?? throw new ArgumentNullException(nameof(handler));
+        _options.DiagnosticsHandler = handler;
         return this;
     }
 

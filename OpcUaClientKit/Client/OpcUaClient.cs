@@ -41,6 +41,10 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         _connectAsync = connectAsync ?? throw new ArgumentNullException(nameof(connectAsync));
     }
 
+    public string ApplicationName => _options.ApplicationName;
+
+    public string? DeviceId => _options.DeviceId;
+
     public bool IsConnected => _connection?.Session.Connected == true;
 
     public async Task ConnectAsync(CancellationToken ct = default)

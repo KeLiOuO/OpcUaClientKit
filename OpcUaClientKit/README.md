@@ -61,6 +61,11 @@ dotnet add package OpcUaClientKit
 - `ISubscribableOpcUaClient`
 - `IEventSubscribableOpcUaClient`
 
+`IOpcUaClient` 还会暴露创建时的只读元信息：
+
+- `ApplicationName`
+- `DeviceId`
+
 ## 快速开始
 
 最简单的连接方式：
