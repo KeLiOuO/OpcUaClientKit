@@ -90,6 +90,7 @@ dotnet test .\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 `OpcUaClientOptions.Reconnect` 或 `WithReconnect(...)` 中显式启用后才会生效。
 
 - 透明恢复范围只包含数据订阅和报警事件订阅
+- 默认会在检测到非预期断联后立即发起第一次重连尝试
 - 普通读写和方法调用在重连窗口内不会自动重试
 - `ReconnectHandler` 会提供 `Disconnected`、`Reconnecting`、`AttemptFailed`、`Reconnected`、
   `GaveUp` 这些生命周期通知

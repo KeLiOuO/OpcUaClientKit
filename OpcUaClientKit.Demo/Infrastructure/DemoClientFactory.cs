@@ -79,6 +79,7 @@ internal static class DemoClientFactory
             {
                 reconnect.Enabled = true;
                 reconnect.MaxAttempts = settings.ReconnectMaxAttempts;
+                reconnect.ReconnectImmediatelyOnFirstFailure = settings.ReconnectImmediatelyOnFirstFailure;
                 reconnect.InitialDelayMs = settings.ReconnectInitialDelayMs;
                 reconnect.MaxDelayMs = settings.ReconnectMaxDelayMs;
                 reconnect.BackoffMultiplier = settings.ReconnectBackoffMultiplier;

@@ -563,7 +563,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                     return;
                 }
 
-                var delay = ComputeBackoffDelay(attempt, options);
+                var delay = ComputeReconnectDelay(attempt, options);
                 try
                 {
                     await Task.Delay(delay, ct).ConfigureAwait(false);
@@ -611,7 +611,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 {
                     var nextRetryDelay = options.MaxAttempts > 0 && attempt >= options.MaxAttempts
                         ? TimeSpan.Zero
-                        : ComputeBackoffDelay(attempt + 1, options);
+                        : ComputeReconnectDelay(attempt + 1, options);
 
                     ReportReconnectEvent(
                         OpcUaReconnectEventKind.AttemptFailed,
@@ -3266,14 +3266,25 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
     }
 
-    private static TimeSpan ComputeBackoffDelay(int attempt, OpcUaReconnectOptions options)
+    private static TimeSpan ComputeReconnectDelay(int attempt, OpcUaReconnectOptions options)
     {
-        if (attempt <= 1)
+        if (attempt <= 0)
+        {
+            return TimeSpan.Zero;
+        }
+
+        if (options.ReconnectImmediatelyOnFirstFailure && attempt == 1)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var effectiveAttempt = options.ReconnectImmediatelyOnFirstFailure ? attempt - 1 : attempt;
+        if (effectiveAttempt <= 1)
         {
             return TimeSpan.FromMilliseconds(options.InitialDelayMs);
         }
 
-        var delayMs = options.InitialDelayMs * Math.Pow(options.BackoffMultiplier, attempt - 1);
+        var delayMs = options.InitialDelayMs * Math.Pow(options.BackoffMultiplier, effectiveAttempt - 1);
         delayMs = Math.Min(delayMs, options.MaxDelayMs);
         return TimeSpan.FromMilliseconds(delayMs);
     }

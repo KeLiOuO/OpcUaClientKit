@@ -18,8 +18,16 @@ public sealed class OpcUaReconnectOptions
     public int MaxAttempts { get; set; } = 10;
 
     /// <summary>
-    /// Gets or sets the delay before the first reconnect attempt in milliseconds.
-    /// Default is <c>1000</c>.
+    /// Gets or sets a value indicating whether the first reconnect attempt should start immediately
+    /// after an unexpected disconnect is detected. When enabled, <see cref="InitialDelayMs"/> is
+    /// applied starting with the second attempt. Default is <c>true</c>.
+    /// </summary>
+    public bool ReconnectImmediatelyOnFirstFailure { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the base reconnect delay in milliseconds. When
+    /// <see cref="ReconnectImmediatelyOnFirstFailure"/> is <c>true</c>, this delay is applied
+    /// starting with the second reconnect attempt. Default is <c>1000</c>.
     /// </summary>
     public int InitialDelayMs { get; set; } = 1000;
 
@@ -49,6 +57,7 @@ public sealed class OpcUaReconnectOptions
         {
             Enabled = Enabled,
             MaxAttempts = MaxAttempts,
+            ReconnectImmediatelyOnFirstFailure = ReconnectImmediatelyOnFirstFailure,
             InitialDelayMs = InitialDelayMs,
             MaxDelayMs = MaxDelayMs,
             BackoffMultiplier = BackoffMultiplier,

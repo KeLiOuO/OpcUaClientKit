@@ -90,6 +90,7 @@ dotnet test .\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 when explicitly configured through `OpcUaClientOptions.Reconnect` or `WithReconnect(...)`.
 
 - Transparent recovery is limited to data subscriptions and alarm event subscriptions
+- By default the first reconnect attempt starts immediately after an unexpected disconnect is detected
 - Normal read/write/method calls are not retried automatically during the reconnect window
 - `Disconnected`, `Reconnecting`, `AttemptFailed`, `Reconnected`, and `GaveUp` lifecycle notifications
   are exposed through `ReconnectHandler`

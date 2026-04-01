@@ -79,6 +79,7 @@ internal sealed class ReconnectScenario : IDemoScenario
         Console.WriteLine($"Event source node: {alarmSourceNode.NodeId}");
         Console.WriteLine(
             $"Reconnect policy: MaxAttempts={context.Settings.ReconnectMaxAttempts}, " +
+            $"ImmediateFirstAttempt={context.Settings.ReconnectImmediatelyOnFirstFailure}, " +
             $"InitialDelayMs={context.Settings.ReconnectInitialDelayMs}, " +
             $"MaxDelayMs={context.Settings.ReconnectMaxDelayMs}, " +
             $"BackoffMultiplier={context.Settings.ReconnectBackoffMultiplier}");

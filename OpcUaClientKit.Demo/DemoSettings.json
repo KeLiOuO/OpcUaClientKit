@@ -16,6 +16,7 @@
   "eventSelectClauseMode": "Dynamic",
   "eventFieldPreviewCount": 12,
   "reconnectMaxAttempts": -1,
+  "reconnectImmediatelyOnFirstFailure": true,
   "reconnectInitialDelayMs": 1000,
   "reconnectMaxDelayMs": 10000,
   "reconnectBackoffMultiplier": 2.0,

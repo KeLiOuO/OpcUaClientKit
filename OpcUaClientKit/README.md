@@ -132,6 +132,7 @@ var client = await factory
     {
         reconnect.Enabled = true;
         reconnect.MaxAttempts = -1;
+        reconnect.ReconnectImmediatelyOnFirstFailure = true;
         reconnect.InitialDelayMs = 1000;
         reconnect.MaxDelayMs = 10000;
         reconnect.BackoffMultiplier = 2.0d;
@@ -188,6 +189,7 @@ await using var client = await factory
     {
         reconnect.Enabled = true;
         reconnect.MaxAttempts = 10;
+        reconnect.ReconnectImmediatelyOnFirstFailure = true;
         reconnect.InitialDelayMs = 1000;
         reconnect.MaxDelayMs = 15000;
         reconnect.BackoffMultiplier = 2.0d;
@@ -232,6 +234,8 @@ await using var client = await factory
 
 补充说明：
 
+- 默认会在检测到非预期断联后立即发起第一次重连尝试
+- `ReconnectImmediatelyOnFirstFailure = false` 时，第一次尝试前也会等待 `InitialDelayMs`
 - 重连成功采用“全部恢复才算成功”的严格语义
 - 只要有任一数据订阅或事件订阅恢复失败，本次尝试就会继续下一轮退避重试
 - 用户主动调用 `DisconnectAsync()` 或 `DisposeAsync()` 不会触发自动重连生命周期事件

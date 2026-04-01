@@ -39,6 +39,8 @@ internal sealed class DemoSettings
 
     public int ReconnectMaxAttempts { get; set; } = -1;
 
+    public bool ReconnectImmediatelyOnFirstFailure { get; set; } = true;
+
     public int ReconnectInitialDelayMs { get; set; } = 1000;
 
     public int ReconnectMaxDelayMs { get; set; } = 10000;

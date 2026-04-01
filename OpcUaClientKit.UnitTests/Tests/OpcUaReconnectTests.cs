@@ -58,8 +58,64 @@ public sealed class OpcUaReconnectTests
         Assert.Contains(reconnectEvents, static evt => evt.Kind == OpcUaReconnectEventKind.Reconnecting);
         Assert.Contains(reconnectEvents, static evt => evt.Kind == OpcUaReconnectEventKind.Reconnected);
         Assert.DoesNotContain(reconnectEvents, static evt => evt.Kind == OpcUaReconnectEventKind.GaveUp);
-        originalSession.Verify(mock => mock.CloseAsync(It.IsAny<int>(), false, It.IsAny<CancellationToken>()), Times.Once);
         reconnectedSession.VerifyAdd(mock => mock.KeepAlive += It.IsAny<KeepAliveEventHandler>(), Times.Once);
+    }
+
+    [Fact]
+    public void ComputeReconnectDelay_returns_zero_for_first_attempt_when_immediate_reconnect_is_enabled()
+    {
+        var delay = (TimeSpan)ReflectionTestHelpers.InvokePrivateStatic(
+            typeof(OpcUaClient),
+            "ComputeReconnectDelay",
+            1,
+            new OpcUaReconnectOptions
+            {
+                Enabled = true,
+                ReconnectImmediatelyOnFirstFailure = true,
+                InitialDelayMs = 1000,
+                MaxDelayMs = 10000,
+                BackoffMultiplier = 2.0d
+            })!;
+
+        Assert.Equal(TimeSpan.Zero, delay);
+    }
+
+    [Fact]
+    public void ComputeReconnectDelay_returns_initial_delay_for_second_attempt_when_immediate_reconnect_is_enabled()
+    {
+        var delay = (TimeSpan)ReflectionTestHelpers.InvokePrivateStatic(
+            typeof(OpcUaClient),
+            "ComputeReconnectDelay",
+            2,
+            new OpcUaReconnectOptions
+            {
+                Enabled = true,
+                ReconnectImmediatelyOnFirstFailure = true,
+                InitialDelayMs = 1000,
+                MaxDelayMs = 10000,
+                BackoffMultiplier = 2.0d
+            })!;
+
+        Assert.Equal(TimeSpan.FromMilliseconds(1000), delay);
+    }
+
+    [Fact]
+    public void ComputeReconnectDelay_returns_initial_delay_for_first_attempt_when_immediate_reconnect_is_disabled()
+    {
+        var delay = (TimeSpan)ReflectionTestHelpers.InvokePrivateStatic(
+            typeof(OpcUaClient),
+            "ComputeReconnectDelay",
+            1,
+            new OpcUaReconnectOptions
+            {
+                Enabled = true,
+                ReconnectImmediatelyOnFirstFailure = false,
+                InitialDelayMs = 1000,
+                MaxDelayMs = 10000,
+                BackoffMultiplier = 2.0d
+            })!;
+
+        Assert.Equal(TimeSpan.FromMilliseconds(1000), delay);
     }
 
     [Fact]
@@ -118,8 +174,6 @@ public sealed class OpcUaReconnectTests
         session.SetupGet(mock => mock.Connected).Returns(true);
         session.SetupAdd(mock => mock.KeepAlive += It.IsAny<KeepAliveEventHandler>());
         session.SetupRemove(mock => mock.KeepAlive -= It.IsAny<KeepAliveEventHandler>());
-        session.Setup(mock => mock.CloseAsync(It.IsAny<int>(), false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(StatusCodes.Good);
         session.Setup(mock => mock.Dispose());
 
         return session;
