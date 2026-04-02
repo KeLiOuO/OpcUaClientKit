@@ -25,12 +25,13 @@ Note: the code in this repository was generated and iteratively refined with GPT
 
 - Simple factory-based client creation
 - Advanced builder-based configuration
-- Certificate bootstrap and endpoint selection
+- Certificate bootstrap, endpoint discovery, and endpoint selection
 - Single-node and batch read/write
 - Method invocation
 - Data subscriptions
 - Alarm event subscriptions
 - Optional automatic reconnect with subscription restoration
+- Explicit security policy and message security mode selection when needed
 
 ## Project structure
 

@@ -1,3 +1,5 @@
+using Opc.Ua;
+
 namespace OpcUaClientKit;
 
 /// <summary>
@@ -41,12 +43,56 @@ public sealed class OpcUaClientBuilder
     }
 
     /// <summary>
-    /// Enables or disables secure endpoint selection.
+    /// Enables or disables automatic preference for secure endpoints when no explicit
+    /// security policy or message security mode is configured.
     /// </summary>
     public OpcUaClientBuilder WithSecurity(bool useSecurity)
     {
         _options.UseSecurity = useSecurity;
         return this;
+    }
+
+    /// <summary>
+    /// Requests a specific endpoint security policy URI. Endpoint discovery fails if the
+    /// server does not expose an exact match.
+    /// </summary>
+    public OpcUaClientBuilder WithSecurityPolicyUri(string securityPolicyUri)
+    {
+        if (string.IsNullOrWhiteSpace(securityPolicyUri))
+        {
+            throw new ArgumentException("Security policy URI is required.", nameof(securityPolicyUri));
+        }
+
+        _options.PreferredSecurityPolicyUri = securityPolicyUri;
+        return this;
+    }
+
+    /// <summary>
+    /// Requests a specific endpoint message security mode. Endpoint discovery fails if the
+    /// server does not expose an exact match.
+    /// </summary>
+    public OpcUaClientBuilder WithMessageSecurityMode(MessageSecurityMode messageSecurityMode)
+    {
+        if (messageSecurityMode == MessageSecurityMode.Invalid)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(messageSecurityMode),
+                "MessageSecurityMode.Invalid is not a valid endpoint selection value.");
+        }
+
+        _options.PreferredMessageSecurityMode = messageSecurityMode;
+        return this;
+    }
+
+    /// <summary>
+    /// Requests an exact security profile by combining a policy URI and message security mode.
+    /// </summary>
+    public OpcUaClientBuilder WithSecurityProfile(
+        string securityPolicyUri,
+        MessageSecurityMode messageSecurityMode)
+    {
+        return WithSecurityPolicyUri(securityPolicyUri)
+            .WithMessageSecurityMode(messageSecurityMode);
     }
 
     /// <summary>

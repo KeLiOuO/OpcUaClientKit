@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Opc.Ua;
 using OpcUaClientKit;
 
 namespace OpcUaClientKit.Demo;
@@ -20,6 +21,10 @@ internal sealed class DemoSettings
     public bool AutoAcceptUntrustedServerCertificate { get; set; } = true;
 
     public bool UseSecurity { get; set; } = true;
+
+    public string? PreferredSecurityPolicyUri { get; set; }
+
+    public string? PreferredMessageSecurityMode { get; set; }
 
     public int SessionTimeout { get; set; } = 60000;
 
@@ -80,6 +85,25 @@ internal sealed class DemoSettings
     public double MethodExpectedTolerance { get; set; } = 0.000001d;
 
     public TimeSpan WaitTimeout => TimeSpan.FromSeconds(Math.Max(1, WaitTimeoutSeconds));
+
+    public MessageSecurityMode? ParsedPreferredMessageSecurityMode
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(PreferredMessageSecurityMode))
+            {
+                return null;
+            }
+
+            return Enum.TryParse<MessageSecurityMode>(
+                PreferredMessageSecurityMode,
+                ignoreCase: true,
+                out var mode)
+                ? mode
+                : throw new InvalidOperationException(
+                    $"{nameof(PreferredMessageSecurityMode)} must be a valid {nameof(MessageSecurityMode)} value.");
+        }
+    }
 
     public OpcUaEventSelectClauseMode ParsedEventSelectClauseMode =>
         Enum.TryParse<OpcUaEventSelectClauseMode>(EventSelectClauseMode, ignoreCase: true, out var mode)
@@ -143,6 +167,8 @@ internal sealed class DemoSettings
         {
             throw new InvalidOperationException($"{nameof(OperationTimeout)} must be greater than 0.");
         }
+
+        _ = ParsedPreferredMessageSecurityMode;
 
         if (WaitTimeoutSeconds <= 0)
         {

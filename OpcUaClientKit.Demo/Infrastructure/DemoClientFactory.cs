@@ -1,4 +1,5 @@
 using OpcUaClientKit;
+using Opc.Ua;
 
 namespace OpcUaClientKit.Demo;
 
@@ -26,7 +27,7 @@ internal static class DemoClientFactory
         DemoSettings settings,
         CancellationToken ct = default)
     {
-        return factory
+        var builder = factory
             .CreateBuilder()
             .WithServerUrl(settings.ServerUrl)
             .WithApplicationName(settings.ApplicationName)
@@ -45,8 +46,10 @@ internal static class DemoClientFactory
                 options.RejectSHA1SignedCertificates = true;
                 options.RejectUnknownRevocationStatus = true;
                 options.MaxRejectedCertificates = 5;
-            })
-            .BuildConnectedAsync(ct);
+            });
+
+        ApplyPreferredSecurityProfile(builder, settings);
+        return builder.BuildConnectedAsync(ct);
     }
 
     public static Task<IOpcUaClient> CreateReconnectConnectedClientAsync(
@@ -55,7 +58,7 @@ internal static class DemoClientFactory
         Action<OpcUaReconnectEvent>? reconnectHandler = null,
         CancellationToken ct = default)
     {
-        return factory
+        var builder = factory
             .CreateBuilder()
             .WithServerUrl(settings.ServerUrl)
             .WithApplicationName(settings.ApplicationName)
@@ -84,7 +87,24 @@ internal static class DemoClientFactory
                 reconnect.MaxDelayMs = settings.ReconnectMaxDelayMs;
                 reconnect.BackoffMultiplier = settings.ReconnectBackoffMultiplier;
                 reconnect.ReconnectHandler = reconnectHandler;
-            })
-            .BuildConnectedAsync(ct);
+            });
+
+        ApplyPreferredSecurityProfile(builder, settings);
+        return builder.BuildConnectedAsync(ct);
+    }
+
+    private static void ApplyPreferredSecurityProfile(
+        OpcUaClientBuilder builder,
+        DemoSettings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.PreferredSecurityPolicyUri))
+        {
+            builder.WithSecurityPolicyUri(settings.PreferredSecurityPolicyUri);
+        }
+
+        if (settings.ParsedPreferredMessageSecurityMode.HasValue)
+        {
+            builder.WithMessageSecurityMode(settings.ParsedPreferredMessageSecurityMode.Value);
+        }
     }
 }

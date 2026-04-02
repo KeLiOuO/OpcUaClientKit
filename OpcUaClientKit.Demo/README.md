@@ -9,6 +9,7 @@
 - 密码：`123456`
 - 默认启用安全连接
 - 默认接受不信任的服务端证书，方便本地联调
+- 默认自动发现全部端点并选择安全性最高的可用端点
 
 配置文件位于 [DemoSettings.json](./DemoSettings.json)。
 
@@ -34,6 +35,24 @@
 当前 reconnect 场景默认会在检测到断联后立即发起第一次重连尝试。
 如果你想改成“第一次也等待一段时间再尝试”，可以把
 `reconnectImmediatelyOnFirstFailure` 改成 `false`。
+
+如果你需要和 UaExpert 等工具保持一致的安全配置，也可以在 `DemoSettings.json`
+里显式设置：
+
+- `preferredSecurityPolicyUri`
+- `preferredMessageSecurityMode`
+
+例如针对一些旧服务器，可以尝试：
+
+```json
+{
+  "preferredSecurityPolicyUri": "http://opcfoundation.org/UA/SecurityPolicy#Basic128Rsa15",
+  "preferredMessageSecurityMode": "SignAndEncrypt"
+}
+```
+
+只要设置了这两个字段，demo 就会优先使用显式端点筛选，而不是单纯依赖
+`useSecurity` 的自动选择。
 
 ## 运行方式
 

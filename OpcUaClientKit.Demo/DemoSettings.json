@@ -7,6 +7,8 @@
   "password": "123456",
   "autoAcceptUntrustedServerCertificate": true,
   "useSecurity": true,
+  "preferredSecurityPolicyUri": null,
+  "preferredMessageSecurityMode": null,
   "sessionTimeout": 60000,
   "operationTimeout": 30000,
   "checkDomain": false,

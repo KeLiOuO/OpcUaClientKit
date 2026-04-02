@@ -15,7 +15,8 @@
 
 - 工厂模式创建客户端
 - 简单参数重载和 Builder 两种配置方式
-- 自动完成配置、证书检查/生成、Endpoint 选择、用户身份和 Session 创建
+- 自动完成配置、证书检查/生成、Endpoint 发现与选择、用户身份和 Session 创建
+- 默认自动发现全部端点并选择安全性最高的可用端点，兼容老策略如 `Basic128Rsa15`
 - 单节点读取、泛型读取、批量读取
 - 单节点写入、批量写入
 - OPC UA 方法调用
@@ -150,6 +151,23 @@ var client = await factory
     .BuildConnectedAsync();
 ```
 
+如果你需要显式指定安全策略和安全模式，可以继续在 Builder 上追加：
+
+```csharp
+using Opc.Ua;
+
+var client = await factory
+    .CreateBuilder()
+    .WithServerUrl("opc.tcp://127.0.0.1:4840")
+    .WithApplicationName("MyOpcUaApp")
+    .WithUserNamePassword("OpcUaClient", "123456")
+    .WithSecurityProfile(
+        SecurityPolicies.Basic128Rsa15,
+        MessageSecurityMode.SignAndEncrypt)
+    .WithAutoAcceptUntrustedServerCertificate(true)
+    .BuildConnectedAsync();
+```
+
 也可以直接传完整配置对象：
 
 ```csharp
@@ -177,6 +195,49 @@ await using var client = await factory.CreateConnectedAsync(options);
 - `Password` 当前仍以普通 `string` 形式保留在托管内存中，这是当前 API 设计下的既定行为
 - 用户主动 `DisconnectAsync()` 或 `DisposeAsync()` 后，之前拿到的订阅句柄会失效，需要重新创建
 - 若启用了自动重连，非预期断联后的数据订阅和事件订阅句柄会自动恢复，不需要上层重建
+
+## Endpoint 发现与安全配置
+
+默认情况下，类库会：
+
+- 先发现服务端公开的全部 `EndpointDescription`
+- 在库内按固定规则排序并选择“安全性最高”的可用端点
+- 排序时保留兼容性，旧策略如 `Basic128Rsa15` 也会参与候选
+
+默认筛选语义：
+
+- `UseSecurity = true`
+  - 优先选择安全端点
+  - 如果服务端只提供 `None` 端点，则允许退到 `None`
+- `UseSecurity = false`
+  - 只选择 `MessageSecurityMode.None`
+
+如果你需要精确复现某个客户端工具里已经验证通过的安全配置，可以显式指定：
+
+- `WithSecurityPolicyUri(...)`
+- `WithMessageSecurityMode(...)`
+- `WithSecurityProfile(...)`
+
+示例：
+
+```csharp
+using Opc.Ua;
+
+var client = await factory
+    .CreateBuilder()
+    .WithServerUrl("opc.tcp://127.0.0.1:4840")
+    .WithApplicationName("MyOpcUaApp")
+    .WithUserNamePassword("OpcUaClient", "123456")
+    .WithSecurityPolicyUri(SecurityPolicies.Basic128Rsa15)
+    .WithMessageSecurityMode(MessageSecurityMode.SignAndEncrypt)
+    .BuildConnectedAsync();
+```
+
+说明：
+
+- 一旦显式指定安全策略或安全模式，显式条件优先，`UseSecurity` 不再参与筛选
+- 若服务端没有完全匹配的端点，连接会直接失败
+- 失败异常中会包含请求的策略/模式以及服务端公开的可用端点摘要，便于排查
 
 ## 自动重连（可选）
 

@@ -1,3 +1,5 @@
+using Opc.Ua;
+
 namespace OpcUaClientKit;
 
 /// <summary>
@@ -32,9 +34,26 @@ public sealed class OpcUaClientOptions
     public string? SessionName { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether secure endpoints should be preferred.
+    /// Gets or sets a value indicating whether secure endpoints should be preferred when
+    /// no explicit security policy or message security mode is requested.
+    /// When <see cref="PreferredSecurityPolicyUri"/> or <see cref="PreferredMessageSecurityMode"/>
+    /// is set, the explicit selection takes precedence.
     /// </summary>
     public bool UseSecurity { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the preferred endpoint security policy URI.
+    /// When set, endpoint discovery will only consider endpoints whose
+    /// <see cref="EndpointDescription.SecurityPolicyUri"/> exactly matches this value.
+    /// </summary>
+    public string? PreferredSecurityPolicyUri { get; set; }
+
+    /// <summary>
+    /// Gets or sets the preferred endpoint message security mode.
+    /// When set, endpoint discovery will only consider endpoints whose
+    /// <see cref="EndpointDescription.SecurityMode"/> exactly matches this value.
+    /// </summary>
+    public MessageSecurityMode? PreferredMessageSecurityMode { get; set; }
 
     /// <summary>
     /// Gets or sets the requested OPC UA session timeout in milliseconds.
@@ -93,6 +112,8 @@ public sealed class OpcUaClientOptions
             DeviceId = DeviceId,
             SessionName = SessionName,
             UseSecurity = UseSecurity,
+            PreferredSecurityPolicyUri = PreferredSecurityPolicyUri,
+            PreferredMessageSecurityMode = PreferredMessageSecurityMode,
             SessionTimeout = SessionTimeout,
             OperationTimeout = OperationTimeout,
             CheckDomain = CheckDomain,

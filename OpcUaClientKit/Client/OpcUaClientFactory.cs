@@ -302,6 +302,9 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         normalized.SessionName = string.IsNullOrWhiteSpace(normalized.SessionName)
             ? null
             : normalized.SessionName.Trim();
+        normalized.PreferredSecurityPolicyUri = string.IsNullOrWhiteSpace(normalized.PreferredSecurityPolicyUri)
+            ? null
+            : normalized.PreferredSecurityPolicyUri.Trim();
         normalized.UserName = string.IsNullOrWhiteSpace(normalized.UserName)
             ? null
             : normalized.UserName.Trim();
@@ -341,6 +344,13 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         if (normalized.OperationTimeout <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(options), "OperationTimeout must be greater than 0.");
+        }
+
+        if (normalized.PreferredMessageSecurityMode == MessageSecurityMode.Invalid)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "PreferredMessageSecurityMode cannot be MessageSecurityMode.Invalid.");
         }
 
         if (normalized.Certificate.MinimumKeySize == 0)
@@ -463,21 +473,238 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         OpcUaClientOptions options,
         CancellationToken ct)
     {
-        // Let the SDK negotiate the best endpoint for the requested security mode and server.
-        var endpointDescription = await CoreClientUtils
-            .SelectEndpointAsync(
-                configuration,
-                options.ServerUrl,
-                options.UseSecurity,
-                options.OperationTimeout,
-                s_telemetry,
-                ct)
-            .ConfigureAwait(false);
+        // Discover the full endpoint set first so the library can apply a deterministic
+        // ranking strategy and support explicit policy/mode selection.
+        var endpointDescriptions = await DiscoverEndpointsAsync(configuration, options, ct).ConfigureAwait(false);
+        var endpointDescription = SelectEndpointDescription(endpointDescriptions, options);
 
         return new ConfiguredEndpoint(
             null,
             endpointDescription,
             EndpointConfiguration.Create(configuration));
+    }
+
+    private static async Task<EndpointDescriptionCollection> DiscoverEndpointsAsync(
+        ApplicationConfiguration configuration,
+        OpcUaClientOptions options,
+        CancellationToken ct)
+    {
+        var endpointConfiguration = EndpointConfiguration.Create(configuration);
+        var discoveryUrl = CoreClientUtils.GetDiscoveryUrl(options.ServerUrl);
+
+        using var discoveryClient = await DiscoveryClient
+            .CreateAsync(configuration, discoveryUrl, endpointConfiguration, DiagnosticsMasks.None, ct)
+            .ConfigureAwait(false);
+        var endpointDescriptions = await discoveryClient
+            .GetEndpointsAsync(null, ct)
+            .ConfigureAwait(false);
+
+        PatchEndpointUrls(endpointDescriptions, discoveryUrl);
+
+        if (endpointDescriptions == null || endpointDescriptions.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"No OPC UA endpoints were discovered for server '{options.ServerUrl}'.");
+        }
+
+        return endpointDescriptions;
+    }
+
+    private static void PatchEndpointUrls(
+        IEnumerable<EndpointDescription> endpointDescriptions,
+        Uri discoveryUrl)
+    {
+        foreach (var endpointDescription in endpointDescriptions)
+        {
+            if (endpointDescription == null ||
+                string.IsNullOrWhiteSpace(endpointDescription.EndpointUrl) ||
+                !Uri.TryCreate(endpointDescription.EndpointUrl, UriKind.Absolute, out var endpointUrl) ||
+                !RequiresHostPatch(endpointUrl))
+            {
+                continue;
+            }
+
+            var patchedEndpointUrl = new UriBuilder(endpointUrl)
+            {
+                Host = discoveryUrl.Host
+            };
+
+            endpointDescription.EndpointUrl = patchedEndpointUrl.Uri.AbsoluteUri;
+        }
+    }
+
+    private static bool RequiresHostPatch(Uri endpointUrl)
+    {
+        return endpointUrl.IsLoopback ||
+               string.Equals(endpointUrl.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(endpointUrl.Host, "0.0.0.0", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(endpointUrl.Host, "::", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static EndpointDescription SelectEndpointDescription(
+        EndpointDescriptionCollection endpointDescriptions,
+        OpcUaClientOptions options)
+    {
+        var candidates = endpointDescriptions
+            .OfType<EndpointDescription>()
+            .Where(static endpoint => endpoint != null)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"No OPC UA endpoints were discovered for server '{options.ServerUrl}'.");
+        }
+
+        candidates = candidates
+            .Where(endpoint => SupportsRequestedIdentity(endpoint, options))
+            .ToList();
+
+        var hasExplicitSecuritySelection =
+            !string.IsNullOrWhiteSpace(options.PreferredSecurityPolicyUri) ||
+            options.PreferredMessageSecurityMode.HasValue;
+
+        if (!string.IsNullOrWhiteSpace(options.PreferredSecurityPolicyUri))
+        {
+            candidates = candidates
+                .Where(endpoint => string.Equals(
+                    endpoint.SecurityPolicyUri,
+                    options.PreferredSecurityPolicyUri,
+                    StringComparison.Ordinal))
+                .ToList();
+        }
+
+        if (options.PreferredMessageSecurityMode.HasValue)
+        {
+            candidates = candidates
+                .Where(endpoint => endpoint.SecurityMode == options.PreferredMessageSecurityMode.Value)
+                .ToList();
+        }
+
+        if (!hasExplicitSecuritySelection)
+        {
+            if (options.UseSecurity)
+            {
+                var secureCandidates = candidates
+                    .Where(static endpoint => endpoint.SecurityMode != MessageSecurityMode.None)
+                    .ToList();
+
+                if (secureCandidates.Count > 0)
+                {
+                    candidates = secureCandidates;
+                }
+            }
+            else
+            {
+                candidates = candidates
+                    .Where(static endpoint => endpoint.SecurityMode == MessageSecurityMode.None)
+                    .ToList();
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            throw CreateEndpointSelectionException(endpointDescriptions, options);
+        }
+
+        return candidates
+            .OrderByDescending(endpoint => GetSecurityModeRank(endpoint.SecurityMode))
+            .ThenByDescending(endpoint => endpoint.SecurityLevel)
+            .ThenByDescending(endpoint => GetSecurityPolicyRank(endpoint.SecurityPolicyUri))
+            .ThenBy(endpoint => endpoint.EndpointUrl, StringComparer.OrdinalIgnoreCase)
+            .First();
+    }
+
+    private static bool SupportsRequestedIdentity(
+        EndpointDescription endpoint,
+        OpcUaClientOptions options)
+    {
+        if (endpoint.UserIdentityTokens == null || endpoint.UserIdentityTokens.Count == 0)
+        {
+            return true;
+        }
+
+        var requiredTokenType = string.IsNullOrWhiteSpace(options.UserName)
+            ? UserTokenType.Anonymous
+            : UserTokenType.UserName;
+
+        return endpoint.UserIdentityTokens.Any(policy => policy.TokenType == requiredTokenType);
+    }
+
+    private static InvalidOperationException CreateEndpointSelectionException(
+        IEnumerable<EndpointDescription> endpointDescriptions,
+        OpcUaClientOptions options)
+    {
+        var requestedSelectionSummary = FormatRequestedEndpointSelection(options);
+        var availableEndpointsSummary = string.Join(
+            "; ",
+            endpointDescriptions.Select(FormatEndpointSummary));
+
+        return new InvalidOperationException(
+            $"No OPC UA endpoint matched the requested selection ({requestedSelectionSummary}). " +
+            $"Available endpoints: {availableEndpointsSummary}");
+    }
+
+    private static string FormatRequestedEndpointSelection(OpcUaClientOptions options)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(options.PreferredSecurityPolicyUri))
+        {
+            parts.Add($"SecurityPolicyUri='{options.PreferredSecurityPolicyUri}'");
+        }
+
+        if (options.PreferredMessageSecurityMode.HasValue)
+        {
+            parts.Add($"SecurityMode='{options.PreferredMessageSecurityMode.Value}'");
+        }
+
+        if (parts.Count == 0)
+        {
+            parts.Add(options.UseSecurity
+                ? "automatic secure endpoint selection"
+                : "automatic non-secure endpoint selection");
+        }
+
+        parts.Add(string.IsNullOrWhiteSpace(options.UserName)
+            ? "Identity='Anonymous'"
+            : "Identity='UserName'");
+
+        return string.Join(", ", parts);
+    }
+
+    private static string FormatEndpointSummary(EndpointDescription endpoint)
+    {
+        return
+            $"Mode={endpoint.SecurityMode}, " +
+            $"Policy={endpoint.SecurityPolicyUri}, " +
+            $"Level={endpoint.SecurityLevel}, " +
+            $"Url={endpoint.EndpointUrl}";
+    }
+
+    private static int GetSecurityModeRank(MessageSecurityMode securityMode)
+    {
+        return securityMode switch
+        {
+            MessageSecurityMode.SignAndEncrypt => 3,
+            MessageSecurityMode.Sign => 2,
+            MessageSecurityMode.None => 1,
+            _ => 0
+        };
+    }
+
+    private static int GetSecurityPolicyRank(string? securityPolicyUri)
+    {
+        return securityPolicyUri switch
+        {
+            SecurityPolicies.Aes256_Sha256_RsaPss => 600,
+            SecurityPolicies.Aes128_Sha256_RsaOaep => 500,
+            SecurityPolicies.Basic256Sha256 => 400,
+            SecurityPolicies.Basic256 => 300,
+            SecurityPolicies.Basic128Rsa15 => 200,
+            SecurityPolicies.None => 0,
+            _ => 100
+        };
     }
 
     private static IUserIdentity CreateUserIdentity(OpcUaClientOptions options)
