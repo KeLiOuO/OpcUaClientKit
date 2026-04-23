@@ -4,16 +4,18 @@
 
 `OpcUaClientKit` 是一个面向现代 .NET 应用的轻量 OPC UA 客户端类库。
 
-这个仓库包含核心类库、规范化的控制台 demo，以及面向真实 OPC UA 服务器的回归测试。
+这个仓库包含核心类库、规范化的控制台 demo、.NET Framework WinForms demo，以及面向真实 OPC UA 服务器的回归测试。
 
 说明：当前仓库中的代码由 GPT-5.4 生成并持续整理、修正。
 
 ## 仓库内容
 
 - `OpcUaClientKit`
-  - 核心可复用类库，目标框架为 `netstandard2.1`
+  - 核心可复用类库，目标框架为 `netstandard2.0` 和 `netstandard2.1`
 - `OpcUaClientKit.Demo`
   - 规范化的控制台示例项目，演示推荐用法
+- `OpcUaClientKit.WinFormsDemo`
+  - `.NET Framework 4.6.2` WinForms 示例，覆盖连接、重连、读写、方法调用、数据订阅和报警订阅
 - `OpcUaClientKit.RegressionTests`
   - 面向真实 OPC UA 服务端的回归测试项目，覆盖读写、方法调用、数据订阅和报警事件订阅
 - `OpcUaClientKit.UnitTests`
@@ -48,6 +50,7 @@
 |   |-- Samples
 |   `-- Subscriptions
 |-- OpcUaClientKit.Demo
+|-- OpcUaClientKit.WinFormsDemo
 |-- OpcUaClientKit.RegressionTests
 |-- OpcUaClientKit.UnitTests
 `-- OpcUaClientKit.slnx
@@ -67,6 +70,13 @@ dotnet build .\OpcUaClientKit.slnx
 dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
 ```
 
+构建并运行 WinForms demo：
+
+```bash
+dotnet build .\OpcUaClientKit.slnx
+.\OpcUaClientKit.WinFormsDemo\bin\Debug\net462\OpcUaClientKit.WinFormsDemo.exe
+```
+
 运行回归测试：
 
 ```bash
@@ -83,7 +93,9 @@ dotnet test .\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 
 - 类库使用说明：[OpcUaClientKit/README.md](./OpcUaClientKit/README.md)
 - Demo 说明：[OpcUaClientKit.Demo/README.md](./OpcUaClientKit.Demo/README.md)
+- WinForms Demo 说明：[OpcUaClientKit.WinFormsDemo/README.md](./OpcUaClientKit.WinFormsDemo/README.md)
 - 回归测试说明：[OpcUaClientKit.RegressionTests/README.md](./OpcUaClientKit.RegressionTests/README.md)
+- Siemens SINUMERIK 常用方法与报警订阅整理：[docs/SIEMENS-SINUMERIK-OPCUA-Methods-And-Alarms.zh-CN.md](./docs/SIEMENS-SINUMERIK-OPCUA-Methods-And-Alarms.zh-CN.md)
 
 ## 自动重连说明
 

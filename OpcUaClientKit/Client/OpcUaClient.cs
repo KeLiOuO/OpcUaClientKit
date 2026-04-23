@@ -6,7 +6,9 @@ namespace OpcUaClientKit;
 
 internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribableOpcUaClient
 {
+#if !NETSTANDARD2_0
     private static readonly ITelemetryContext s_telemetry = DefaultTelemetry.Create(_ => { });
+#endif
     private static readonly HashSet<uint> s_retryableSuppressedOrShelvedFilterStatusCodes = new()
     {
         StatusCodes.BadEventFilterInvalid,
@@ -179,7 +181,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
         if (StatusCode.IsBad(statusCode))
         {
-            throw new ServiceResultException(statusCode, $"Failed to write node '{normalizedNodeId}'.");
+            throw CreateServiceResultException(statusCode, $"Failed to write node '{normalizedNodeId}'.");
         }
     }
 
@@ -814,7 +816,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
         if (StatusCode.IsBad(dataValue.StatusCode))
         {
-            throw new ServiceResultException(dataValue.StatusCode, $"Failed to read node '{nodeId}'.");
+            throw CreateServiceResultException(dataValue.StatusCode, $"Failed to read node '{nodeId}'.");
         }
     }
 
@@ -926,7 +928,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         var result = results[0];
         if (StatusCode.IsBad(result.StatusCode))
         {
-            throw new ServiceResultException(
+            throw CreateServiceResultException(
                 result.StatusCode,
                 $"Failed to call method '{methodNodeId}' on object '{objectNodeId}'.");
         }
@@ -938,7 +940,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
                 var inputStatusCode = result.InputArgumentResults[i];
                 if (StatusCode.IsBad(inputStatusCode))
                 {
-                    throw new ServiceResultException(
+                    throw CreateServiceResultException(
                         inputStatusCode,
                         $"Input argument {i} is invalid when calling method '{methodNodeId}' on object '{objectNodeId}'.");
                 }
@@ -1040,30 +1042,46 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
     private static Subscription CreateDataSubscription(OpcUaSubscriptionBuildRequest request)
     {
-        return new Subscription(s_telemetry, null)
-        {
-            DisplayName = request.Name ?? string.Empty,
-            PublishingEnabled = request.PublishingEnabled,
-            PublishingInterval = request.PublishingInterval,
-            KeepAliveCount = request.KeepAliveCount,
-            LifetimeCount = request.LifetimeCount,
-            MaxNotificationsPerPublish = request.MaxNotificationsPerPublish,
-            Priority = request.Priority
-        };
+        var subscription = CreateSdkSubscription();
+        subscription.DisplayName = request.Name ?? string.Empty;
+        subscription.PublishingEnabled = request.PublishingEnabled;
+        subscription.PublishingInterval = request.PublishingInterval;
+        subscription.KeepAliveCount = request.KeepAliveCount;
+        subscription.LifetimeCount = request.LifetimeCount;
+        subscription.MaxNotificationsPerPublish = request.MaxNotificationsPerPublish;
+        subscription.Priority = request.Priority;
+        return subscription;
     }
 
     private static Subscription CreateEventSubscription(OpcUaEventSubscriptionBuildRequest request)
     {
-        return new Subscription(s_telemetry, null)
-        {
-            DisplayName = request.Name ?? string.Empty,
-            PublishingEnabled = request.PublishingEnabled,
-            PublishingInterval = request.PublishingInterval,
-            KeepAliveCount = request.KeepAliveCount,
-            LifetimeCount = request.LifetimeCount,
-            MaxNotificationsPerPublish = request.MaxNotificationsPerPublish,
-            Priority = request.Priority
-        };
+        var subscription = CreateSdkSubscription();
+        subscription.DisplayName = request.Name ?? string.Empty;
+        subscription.PublishingEnabled = request.PublishingEnabled;
+        subscription.PublishingInterval = request.PublishingInterval;
+        subscription.KeepAliveCount = request.KeepAliveCount;
+        subscription.LifetimeCount = request.LifetimeCount;
+        subscription.MaxNotificationsPerPublish = request.MaxNotificationsPerPublish;
+        subscription.Priority = request.Priority;
+        return subscription;
+    }
+
+    private static Subscription CreateSdkSubscription()
+    {
+#if NETSTANDARD2_0
+        return new Subscription();
+#else
+        return new Subscription(s_telemetry, null);
+#endif
+    }
+
+    private static MonitoredItem CreateSdkMonitoredItem()
+    {
+#if NETSTANDARD2_0
+        return new MonitoredItem();
+#else
+        return new MonitoredItem(s_telemetry, null);
+#endif
     }
 
     private async Task<IReadOnlyList<OpcUaMonitoredItemRegistration>> ApplyDataMonitoredItemsAsync(
@@ -1511,16 +1529,14 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
         foreach (var node in nodes)
         {
-            var monitoredItem = new MonitoredItem(s_telemetry, null)
-            {
-                StartNodeId = ParseNodeId(node.NodeId),
-                AttributeId = Attributes.Value,
-                DisplayName = node.Options.DisplayName ?? string.Empty,
-                MonitoringMode = MonitoringMode.Reporting,
-                SamplingInterval = ConvertSamplingInterval(node.Options.SamplingInterval),
-                QueueSize = node.Options.QueueSize,
-                DiscardOldest = node.Options.DiscardOldest
-            };
+            var monitoredItem = CreateSdkMonitoredItem();
+            monitoredItem.StartNodeId = ParseNodeId(node.NodeId);
+            monitoredItem.AttributeId = Attributes.Value;
+            monitoredItem.DisplayName = node.Options.DisplayName ?? string.Empty;
+            monitoredItem.MonitoringMode = MonitoringMode.Reporting;
+            monitoredItem.SamplingInterval = ConvertSamplingInterval(node.Options.SamplingInterval);
+            monitoredItem.QueueSize = node.Options.QueueSize;
+            monitoredItem.DiscardOldest = node.Options.DiscardOldest;
 
             OpcUaMonitoredItemRegistration? registration = null;
             MonitoredItemNotificationEventHandler handler = (item, eventArgs) =>
@@ -1554,16 +1570,14 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
         foreach (var sourceNode in sourceNodes)
         {
-            var monitoredItem = new MonitoredItem(s_telemetry, null)
-            {
-                StartNodeId = ParseNodeId(sourceNode.NodeId),
-                AttributeId = Attributes.EventNotifier,
-                DisplayName = sourceNode.DisplayName ?? string.Empty,
-                MonitoringMode = MonitoringMode.Reporting,
-                QueueSize = queueSize,
-                DiscardOldest = discardOldest,
-                Filter = CreateAlarmEventFilter(filterDefinition, useServerSideSuppressedOrShelvedFilter)
-            };
+            var monitoredItem = CreateSdkMonitoredItem();
+            monitoredItem.StartNodeId = ParseNodeId(sourceNode.NodeId);
+            monitoredItem.AttributeId = Attributes.EventNotifier;
+            monitoredItem.DisplayName = sourceNode.DisplayName ?? string.Empty;
+            monitoredItem.MonitoringMode = MonitoringMode.Reporting;
+            monitoredItem.QueueSize = queueSize;
+            monitoredItem.DiscardOldest = discardOldest;
+            monitoredItem.Filter = CreateAlarmEventFilter(filterDefinition, useServerSideSuppressedOrShelvedFilter);
 
             OpcUaEventMonitoredItemRegistration? registration = null;
             MonitoredItemNotificationEventHandler handler = (item, eventArgs) =>
@@ -1817,8 +1831,11 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
     {
         if (ignoreSuppressedOrShelved)
         {
-            var isAlarmConditionType = await session.NodeCache
-                .IsTypeOfAsync(eventTypeNodeId, ObjectTypeIds.AlarmConditionType, ct)
+            var isAlarmConditionType = await IsTypeOfAsync(
+                    session,
+                    eventTypeNodeId,
+                    ObjectTypeIds.AlarmConditionType,
+                    ct)
                 .ConfigureAwait(false);
 
             if (!isAlarmConditionType)
@@ -2168,12 +2185,21 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
             BrowseDirection = browseDirection,
             ReferenceTypeId = referenceTypeId,
             IncludeSubtypes = includeSubtypes,
+#if NETSTANDARD2_0
+            NodeClassMask = checked((int)nodeClassMask),
+#else
             NodeClassMask = nodeClassMask,
+#endif
             ResultMask = (uint)BrowseResultMask.All,
             ContinueUntilDone = true
         };
 
+#if NETSTANDARD2_0
+        await Task.CompletedTask.ConfigureAwait(false);
+        return browser.Browse(nodeId);
+#else
         return await browser.BrowseAsync(nodeId, ct).ConfigureAwait(false);
+#endif
     }
 
     private static void AddSelectClauseDescriptor(
@@ -2675,7 +2701,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         string operation)
     {
         var code = statusCode.Code;
-        var symbolicId = StatusCodes.LookupSymbolicId(code);
+        var symbolicId = LookupStatusCodeSymbolicId(code);
         var message = string.IsNullOrWhiteSpace(symbolicId)
             ? $"Failed to {operation} node '{nodeId}'."
             : $"Failed to {operation} node '{nodeId}' ({symbolicId}).";
@@ -2696,6 +2722,22 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
 
         return false;
+    }
+
+    private static ServiceResultException CreateServiceResultException(
+        StatusCode statusCode,
+        string message)
+    {
+        return new ServiceResultException(statusCode.Code, message);
+    }
+
+    private static string? LookupStatusCodeSymbolicId(uint code)
+    {
+#if NETSTANDARD2_0
+        return StatusCode.LookupSymbolicId(code);
+#else
+        return StatusCodes.LookupSymbolicId(code);
+#endif
     }
 
     private static bool ShouldIgnoreSuppressedOrShelvedEvent(
@@ -2752,7 +2794,7 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
         if (StatusCode.IsBad(results[0].StatusCode))
         {
-            throw new ServiceResultException(
+            throw CreateServiceResultException(
                 results[0].StatusCode,
                 $"Failed to validate event source '{sourceNodeId}'.");
         }
@@ -2798,8 +2840,11 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
 
         await session.FetchTypeTreeAsync(new ExpandedNodeId(parsedEventTypeNodeId), ct).ConfigureAwait(false);
 
-        var isConditionType = await session.NodeCache
-            .IsTypeOfAsync(parsedEventTypeNodeId, ObjectTypeIds.ConditionType, ct)
+        var isConditionType = await IsTypeOfAsync(
+                session,
+                parsedEventTypeNodeId,
+                ObjectTypeIds.ConditionType,
+                ct)
             .ConfigureAwait(false);
 
         if (!isConditionType)
@@ -2809,6 +2854,22 @@ internal sealed class OpcUaClient : ISubscribableOpcUaClient, IEventSubscribable
         }
 
         return parsedEventTypeNodeId;
+    }
+
+    private static async Task<bool> IsTypeOfAsync(
+        ISession session,
+        NodeId nodeId,
+        NodeId superTypeNodeId,
+        CancellationToken ct)
+    {
+#if NETSTANDARD2_0
+        await session.FetchTypeTreeAsync(new ExpandedNodeId(nodeId), ct).ConfigureAwait(false);
+        return session.NodeCache is NodeCache nodeCache && nodeCache.IsTypeOf(nodeId, superTypeNodeId);
+#else
+        return await session.NodeCache
+            .IsTypeOfAsync(nodeId, superTypeNodeId, ct)
+            .ConfigureAwait(false);
+#endif
     }
 
     private static async Task CloseConnectionAsync(

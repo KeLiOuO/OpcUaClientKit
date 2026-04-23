@@ -4,16 +4,18 @@
 
 `OpcUaClientKit` is a lightweight OPC UA client library for modern .NET applications.
 
-This repository includes the core library, a structured console demo, and regression tests against a real OPC UA server.
+This repository includes the core library, a structured console demo, a .NET Framework WinForms demo, and regression tests against a real OPC UA server.
 
 Note: the code in this repository was generated and iteratively refined with GPT-5.4.
 
 ## What is included
 
 - `OpcUaClientKit`
-  - The main reusable library targeting `netstandard2.1`
+  - The main reusable library targeting `netstandard2.0` and `netstandard2.1`
 - `OpcUaClientKit.Demo`
   - A console demo that shows the recommended usage patterns
+- `OpcUaClientKit.WinFormsDemo`
+  - A `.NET Framework 4.6.2` WinForms demo for connection, reconnect, read/write, method calls, data subscriptions, and alarm subscriptions
 - `OpcUaClientKit.RegressionTests`
   - Integration-style regression tests for read/write, method calls, data subscriptions, and alarm event subscriptions
 - `OpcUaClientKit.UnitTests`
@@ -48,6 +50,7 @@ Note: the code in this repository was generated and iteratively refined with GPT
 |   |-- Samples
 |   `-- Subscriptions
 |-- OpcUaClientKit.Demo
+|-- OpcUaClientKit.WinFormsDemo
 |-- OpcUaClientKit.RegressionTests
 |-- OpcUaClientKit.UnitTests
 `-- OpcUaClientKit.slnx
@@ -67,6 +70,13 @@ Run the console demo:
 dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- list
 ```
 
+Build and run the WinForms demo:
+
+```bash
+dotnet build .\OpcUaClientKit.slnx
+.\OpcUaClientKit.WinFormsDemo\bin\Debug\net462\OpcUaClientKit.WinFormsDemo.exe
+```
+
 Run regression tests:
 
 ```bash
@@ -83,7 +93,9 @@ dotnet test .\OpcUaClientKit.UnitTests\OpcUaClientKit.UnitTests.csproj
 
 - Library guide: [OpcUaClientKit/README.md](./OpcUaClientKit/README.md)
 - Demo guide: [OpcUaClientKit.Demo/README.md](./OpcUaClientKit.Demo/README.md)
+- WinForms demo guide: [OpcUaClientKit.WinFormsDemo/README.md](./OpcUaClientKit.WinFormsDemo/README.md)
 - Regression test notes: [OpcUaClientKit.RegressionTests/README.md](./OpcUaClientKit.RegressionTests/README.md)
+- Siemens SINUMERIK methods and alarms notes: [docs/SIEMENS-SINUMERIK-OPCUA-Methods-And-Alarms.zh-CN.md](./docs/SIEMENS-SINUMERIK-OPCUA-Methods-And-Alarms.zh-CN.md)
 
 ## Reconnect behavior
 

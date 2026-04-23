@@ -64,7 +64,10 @@ public sealed class OpcUaEventNotification
         Fields = fields == null
             ? throw new ArgumentNullException(nameof(fields))
             : new ReadOnlyDictionary<string, object?>(
-                new Dictionary<string, object?>(fields, StringComparer.Ordinal));
+                fields.ToDictionary(
+                    static field => field.Key,
+                    static field => field.Value,
+                    StringComparer.Ordinal));
     }
 
     /// <summary>

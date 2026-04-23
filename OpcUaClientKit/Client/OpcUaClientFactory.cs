@@ -11,8 +11,12 @@ namespace OpcUaClientKit;
 public sealed class OpcUaClientFactory : IOpcUaClientFactory
 {
     private const ushort DefaultCertificateLifetimeInMonths = 120;
+    private const string Aes256Sha256RsaPssPolicy = "http://opcfoundation.org/UA/SecurityPolicy#Aes256_Sha256_RsaPss";
+    private const string Aes128Sha256RsaOaepPolicy = "http://opcfoundation.org/UA/SecurityPolicy#Aes128_Sha256_RsaOaep";
     private static readonly IList<string> s_preferredLocales = new List<string>();
+#if !NETSTANDARD2_0
     private static readonly ITelemetryContext s_telemetry = DefaultTelemetry.Create(_ => { });
+#endif
 
     /// <summary>
     /// Creates a disconnected client with anonymous identity and simple options.
@@ -421,7 +425,11 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
             }
         };
 
+#if NETSTANDARD2_0
+        await applicationConfiguration.Validate(ApplicationType.Client).ConfigureAwait(false);
+#else
         await applicationConfiguration.ValidateAsync(ApplicationType.Client, ct).ConfigureAwait(false);
+#endif
         return applicationConfiguration;
     }
 
@@ -431,7 +439,12 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         OpcUaClientOptions options,
         CancellationToken ct)
     {
-        var application = new ApplicationInstance(s_telemetry)
+        var application =
+#if NETSTANDARD2_0
+            new ApplicationInstance
+#else
+            new ApplicationInstance(s_telemetry)
+#endif
         {
             ApplicationName = effectiveApplicationName,
             ApplicationType = ApplicationType.Client,
@@ -440,7 +453,11 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
 
         // This call both loads an existing application certificate and creates one on first use.
         var hasApplicationCertificate = await application
+#if NETSTANDARD2_0
+            .CheckApplicationInstanceCertificates(true, DefaultCertificateLifetimeInMonths, ct)
+#else
             .CheckApplicationInstanceCertificatesAsync(true, DefaultCertificateLifetimeInMonths, ct)
+#endif
             .ConfigureAwait(false);
 
         if (!hasApplicationCertificate)
@@ -448,7 +465,11 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
             throw new InvalidOperationException("The OPC UA application certificate could not be created or loaded.");
         }
 
+#if NETSTANDARD2_0
+        await configuration.CertificateValidator.Update(configuration).ConfigureAwait(false);
+#else
         await configuration.CertificateValidator.UpdateAsync(configuration, ct).ConfigureAwait(false);
+#endif
 
         var certificateValidationHandler = CreateCertificateValidationHandler(options);
         configuration.CertificateValidator.CertificateValidation += certificateValidationHandler;
@@ -492,9 +513,13 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         var endpointConfiguration = EndpointConfiguration.Create(configuration);
         var discoveryUrl = CoreClientUtils.GetDiscoveryUrl(options.ServerUrl);
 
+#if NETSTANDARD2_0
+        using var discoveryClient = DiscoveryClient.Create(configuration, discoveryUrl, endpointConfiguration);
+#else
         using var discoveryClient = await DiscoveryClient
             .CreateAsync(configuration, discoveryUrl, endpointConfiguration, DiagnosticsMasks.None, ct)
             .ConfigureAwait(false);
+#endif
         var endpointDescriptions = await discoveryClient
             .GetEndpointsAsync(null, ct)
             .ConfigureAwait(false);
@@ -697,8 +722,8 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
     {
         return securityPolicyUri switch
         {
-            SecurityPolicies.Aes256_Sha256_RsaPss => 600,
-            SecurityPolicies.Aes128_Sha256_RsaOaep => 500,
+            Aes256Sha256RsaPssPolicy => 600,
+            Aes128Sha256RsaOaepPolicy => 500,
             SecurityPolicies.Basic256Sha256 => 400,
             SecurityPolicies.Basic256 => 300,
             SecurityPolicies.Basic128Rsa15 => 200,
@@ -715,8 +740,13 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
         }
 
         return new UserIdentity(
+#if NETSTANDARD2_0
+            options.UserName,
+            options.Password ?? string.Empty);
+#else
             options.UserName,
             Encoding.UTF8.GetBytes(options.Password ?? string.Empty));
+#endif
     }
 
     private static async Task<ISession> CreateSessionAsync(
@@ -729,7 +759,12 @@ public sealed class OpcUaClientFactory : IOpcUaClientFactory
     {
         // Session creation is the last step after configuration, certificate handling and
         // endpoint discovery have completed successfully.
-        var sessionFactory = new DefaultSessionFactory(s_telemetry);
+        var sessionFactory =
+#if NETSTANDARD2_0
+            DefaultSessionFactory.Instance;
+#else
+            new DefaultSessionFactory(s_telemetry);
+#endif
         return await sessionFactory
             .CreateAsync(
                 configuration,

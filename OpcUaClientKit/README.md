@@ -28,10 +28,11 @@
 
 ## 目标框架
 
-当前类库使用 `netstandard2.1` 构建。
+当前类库使用 `netstandard2.0` 和 `netstandard2.1` 多目标构建。
 
 这意味着它可以直接用于支持 `netstandard2.1` 的现代 .NET 项目，例如：
 
+- `.NET Framework 4.6.2` 项目可通过 `netstandard2.0` 资产引用
 - `.NET Core 3.1`
 - `.NET 5`
 - `.NET 6`
@@ -504,11 +505,12 @@ await subscription.AddSourceAsync(new OpcUaNode("ns=6;s=MyObjectsFolder", "MyObj
 
 ## Demo 项目
 
-当前解决方案里只保留一个新的规范化 console demo：
+当前解决方案里包含两个 demo：
 
 - `OpcUaClientKit.Demo`
+- `OpcUaClientKit.WinFormsDemo`
 
-这个 demo 按场景拆分：
+Console demo 按场景拆分：
 
 - `quickstart`
 - `readwrite`
@@ -525,6 +527,21 @@ dotnet run --project .\OpcUaClientKit.Demo\OpcUaClientKit.Demo.csproj -- quickst
 Demo 配置文件：
 
 - [`../OpcUaClientKit.Demo/DemoSettings.json`](../OpcUaClientKit.Demo/DemoSettings.json)
+
+WinForms demo 面向 `.NET Framework 4.6.2`，覆盖连接、自动重连、单点/批量读写、方法调用、数据订阅和报警事件订阅：
+
+```bash
+dotnet build .\OpcUaClientKit.slnx
+.\OpcUaClientKit.WinFormsDemo\bin\Debug\net462\OpcUaClientKit.WinFormsDemo.exe
+```
+
+WinForms demo 说明：
+
+- [`../OpcUaClientKit.WinFormsDemo/README.md`](../OpcUaClientKit.WinFormsDemo/README.md)
+
+Siemens SINUMERIK 方法与报警订阅整理：
+
+- [`../docs/SIEMENS-SINUMERIK-OPCUA-Methods-And-Alarms.zh-CN.md`](../docs/SIEMENS-SINUMERIK-OPCUA-Methods-And-Alarms.zh-CN.md)
 
 ## 回归测试
 
